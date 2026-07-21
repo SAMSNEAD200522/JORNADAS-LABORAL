@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control de Jornadas - Subsecretar&iacute;a de Espacio P&uacute;blico</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="snackbar" class="snackbar"></div>
+
+  <div id="loginPage" class="login-page">
+    <div class="login-card">
+      <div class="login-header">
+        <h2>Control de Jornadas</h2>
+        <p>Subsecretar&iacute;a de Espacio P&uacute;blico</p>
+      </div>
+      <form id="loginForm">
+        <label for="loginEmail">Correo electr&oacute;nico</label>
+        <input type="email" id="loginEmail" placeholder="admin@empresa.com" required autocomplete="email">
+        <label for="loginPassword">Contrase&ntilde;a</label>
+        <input type="password" id="loginPassword" placeholder="Ingrese su contrase&ntilde;a" required autocomplete="current-password">
+        <p id="loginError" class="login-error"></p>
+        <button type="submit">Ingresar</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="appShell">
+    <div class="app-header">
+      <div class="app-header-title"><span>Control de Jornadas</span><span>Subsecretar&iacute;a de Espacio P&uacute;blico</span></div>
+      <div class="user-info">
+        <span id="userName"></span>
+        <span style="opacity:.5">|</span>
+        <span id="userRole" style="font-size:12px;opacity:.75"></span>
+        <button onclick="logout()">Cerrar sesi&oacute;n</button>
+      </div>
+    </div>
+    <div class="app-body">
+      <div class="app-sidebar">
+        <nav id="sidebarMenu"></nav>
+        <div class="sidebar-footer">
+          <div class="sidebar-character"></div>
+          <div class="sidebar-brand">Subsecretar&iacute;a de<br>Espacio P&uacute;blico</div>
+        </div>
+      </div>
+      <div class="app-content" id="pageContent">
+        <div class="loader-container"><div class="loader"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

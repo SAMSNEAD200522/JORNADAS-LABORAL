@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: control-jornadas-db
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_DB: control_jornadas
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: app_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U app_user -d control_jornadas']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      target: prod
+    container_name: control-jornadas-api
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: 'postgresql://app_user:app_password@postgres:5432/control_jornadas?schema=public'
+      JWT_SECRET: 'cambiar_en_produccion'
+      JWT_EXPIRES_IN: '8h'
+      APP_PORT: '3000'
+      APP_PREFIX: '/api/v1'
+      TZ: 'America/Bogota'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

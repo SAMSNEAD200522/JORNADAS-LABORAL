@@ -1,0 +1,215 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMINISTRADOR
+  GESTION_HUMANA
+  SUPERVISOR
+}
+
+enum EmployeeDocumentType {
+  CC
+  CE
+  PASAPORTE
+}
+
+enum WorkModality {
+  ADMINISTRATIVO
+  TERRITORIO
+}
+
+enum CompensatoryType {
+  CON_COMPENSATORIO
+  SIN_COMPENSATORIO
+  PENDIENTE_DEFINICION
+  NO_APLICA
+}
+
+model User {
+  id                        Int            @id @default(autoincrement())
+  email                     String         @unique
+  passwordHash              String
+  name                      String
+  role                      Role           @default(SUPERVISOR)
+  isActive                  Boolean        @default(true)
+  createdAt                 DateTime       @default(now())
+  updatedAt                 DateTime       @updatedAt
+  auditLogs                 AuditLog[]
+  compensatoryDecisions     WorkSession[]  @relation("CompensatoryDecision")
+
+  @@map("usuarios")
+}
+
+model Employee {
+  id                  Int                   @id @default(autoincrement())
+  documentType        EmployeeDocumentType  @default(CC) @map("tipo_documento")
+  documentNumber      String                @unique @map("numero_documento")
+  firstName           String                @map("nombres")
+  lastName            String                @map("apellidos")
+  email               String?
+  phone               String?
+  position            String?               @map("cargo")
+  area                String?
+  hireDate            DateTime              @default(now()) @map("fecha_ingreso")
+  isActive            Boolean               @default(true) @map("activo")
+  scheduleId          Int?                  @map("horario_id")
+  schedule            Schedule?             @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  workConfigId        Int?                  @map("configuracion_trabajo_id")
+  workConfig          WorkConfig?           @relation(fields: [workConfigId], references: [id], onDelete: SetNull)
+  workModality        WorkModality          @default(ADMINISTRATIVO) @map("modalidad_laboral")
+  weeklyTargetMinutes Int                   @default(2520) @map("minutos_semanales_objetivo")
+  workSessions        WorkSession[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@index([lastName])
+  @@index([isActive])
+  @@index([area])
+  @@map("empleados")
+}
+
+model Schedule {
+  id          Int            @id @default(autoincrement())
+  name        String         @unique @map("nombre")
+  startTime   String         @map("hora_entrada")
+  endTime     String         @map("hora_salida")
+  workDays    String         @map("dias_laborales")
+  breakMinutes Int?          @map("descanso_minutos")
+  isActive    Boolean        @default(true) @map("activo")
+  employees   Employee[]
+  scheduleDays ScheduleDay[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("horarios")
+}
+
+model ScheduleDay {
+  id           Int      @id @default(autoincrement())
+  scheduleId   Int      @map("horario_id")
+  schedule     Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  dayOfWeek    Int      @map("dia_semana")
+  startTime    String   @map("hora_entrada")
+  endTime      String   @map("hora_salida")
+  breakMinutes Int?     @map("descanso_minutos")
+
+  @@unique([scheduleId, dayOfWeek])
+  @@map("horarios_diarios")
+}
+
+model WorkConfig {
+  id                    Int                     @id @default(autoincrement())
+  name                  String                  @unique @map("nombre")
+  description           String?                 @map("descripcion")
+  modality              WorkModality            @map("modalidad")
+  isActive              Boolean                 @default(true) @map("activo")
+  breakMinutes          Int                     @default(60) @map("descanso_minutos")
+  breakThresholdMinutes Int?                    @map("minutos_para_descanso")
+  weeklyTargetMinutes   Int                     @default(2520) @map("minutos_semanales_objetivo")
+  employees             Employee[]
+  ordinaryDistributions OrdinaryDistribution[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  @@map("configuracion_trabajo")
+}
+
+model OrdinaryDistribution {
+  id                 Int        @id @default(autoincrement())
+  workConfigId       Int        @map("configuracion_id")
+  workConfig         WorkConfig @relation(fields: [workConfigId], references: [id], onDelete: Cascade)
+  dayOfWeek          Int        @map("dia_semana")
+  ordinaryMinutesCap Int        @map("tope_minutos_ordinarios")
+
+  @@unique([workConfigId, dayOfWeek])
+  @@map("distribucion_ordinaria")
+}
+
+model GlobalConfig {
+  id                  Int      @id @default(autoincrement())
+  nightStart          String   @default("21:00") @map("inicio_nocturno")
+  nightEnd            String   @default("06:00") @map("fin_nocturno")
+  defaultBreakMinutes Int      @default(60) @map("descanso_por_defecto")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("configuracion_global")
+}
+
+model WorkSession {
+  id                        Int               @id @default(autoincrement())
+  employeeId                Int               @map("empleado_id")
+  employee                  Employee          @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  startTime                 DateTime          @map("inicio")
+  endTime                   DateTime          @map("fin")
+  totalMinutes              Int?              @map("total_minutos")
+  ordinaryMinutes           Int?              @map("minutos_ordinarios")
+  nightSurchargeMinutes     Int?              @map("minutos_recargo_nocturno")
+  extraDayMinutes           Int?              @map("minutos_extra_diurna")
+  extraNightMinutes         Int?              @map("minutos_extra_nocturna")
+  sundayMinutes             Int?              @map("minutos_dominical")
+  holidayMinutes            Int?              @map("minutos_festivo")
+  extraHolidayDayMinutes    Int?              @map("minutos_extra_festiva_diurna")
+  extraHolidayNightMinutes  Int?              @map("minutos_extra_festiva_nocturna")
+  sundayNightSurchargeMinutes Int?            @map("minutos_recargo_nocturno_dominical_festivo")
+  isVoided                  Boolean           @default(false) @map("anulado")
+  voidedAt                  DateTime?         @map("fecha_anulacion")
+  voidedReason              String?           @map("motivo_anulacion")
+  restDayWorked             Boolean           @default(false) @map("dia_descanso_trabajado")
+  compensatoryType          CompensatoryType  @default(NO_APLICA) @map("tipo_compensatorio")
+  compensatoryUserId        Int?              @map("usuario_decision_compensatorio")
+  compensatoryUser          User?             @relation("CompensatoryDecision", fields: [compensatoryUserId], references: [id], onDelete: SetNull)
+  compensatoryDecisionDate  DateTime?         @map("fecha_decision_compensatorio")
+  compensatoryHours         Int?              @map("horas_compensatorio")
+  compensatoryObservation   String?           @map("observacion_compensatorio")
+  createdAt                 DateTime          @default(now())
+  updatedAt                 DateTime          @updatedAt
+
+  @@index([startTime])
+  @@index([endTime])
+  @@index([employeeId, startTime])
+  @@index([employeeId, isVoided, startTime])
+  @@map("jornadas")
+}
+
+model Holiday {
+  id        Int       @id @default(autoincrement())
+  date      DateTime  @unique @map("fecha")
+  name      String    @map("nombre")
+  createdAt DateTime  @default(now())
+
+  @@map("festivos")
+}
+
+model AuditLog {
+  id          Int       @id @default(autoincrement())
+  userId      Int?      @map("usuario_id")
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String    @map("accion")
+  entity      String    @map("entidad")
+  entityId    Int?      @map("entidad_id")
+  oldValues   Json?     @map("valores_anteriores")
+  newValues   Json?     @map("valores_nuevos")
+  createdAt   DateTime  @default(now())
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("auditoria")
+}
+
+model BlacklistedToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("tokens_revocados")
+}
