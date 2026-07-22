@@ -310,7 +310,10 @@ describe('WorkConfigService', () => {
       const dtoSinNombre: UpdateWorkConfigDto = {
         description: 'Solo cambio descripción',
       };
-      const updated = { ...mockWorkConfig, description: dtoSinNombre.description };
+      const updated = {
+        ...mockWorkConfig,
+        description: dtoSinNombre.description,
+      };
       mockPrismaService.workConfig.update.mockResolvedValue(updated);
 
       await service.update(1, dtoSinNombre, 1);
@@ -452,7 +455,9 @@ describe('WorkConfigService', () => {
 
       const result = await service.upsertDistribution(1, dto, 1);
 
-      expect(mockPrismaService.ordinaryDistribution.upsert).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.ordinaryDistribution.upsert,
+      ).toHaveBeenCalledWith({
         where: {
           workConfigId_dayOfWeek: { workConfigId: 1, dayOfWeek: dto.dayOfWeek },
         },
@@ -475,8 +480,15 @@ describe('WorkConfigService', () => {
 
     it('debería actualizar una distribución existente', async () => {
       mockPrismaService.workConfig.findUnique.mockResolvedValue(mockWorkConfig);
-      const updatedDist = { id: 1, workConfigId: 1, dayOfWeek: 1, ordinaryMinutesCap: 600 };
-      mockPrismaService.ordinaryDistribution.upsert.mockResolvedValue(updatedDist);
+      const updatedDist = {
+        id: 1,
+        workConfigId: 1,
+        dayOfWeek: 1,
+        ordinaryMinutesCap: 600,
+      };
+      mockPrismaService.ordinaryDistribution.upsert.mockResolvedValue(
+        updatedDist,
+      );
 
       const result = await service.upsertDistribution(1, dto, 1);
 
@@ -486,9 +498,9 @@ describe('WorkConfigService', () => {
     it('debería lanzar NotFoundException si la configuración no existe', async () => {
       mockPrismaService.workConfig.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.upsertDistribution(999, dto, 1),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.upsertDistribution(999, dto, 1)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -503,7 +515,9 @@ describe('WorkConfigService', () => {
 
       const result = await service.findDistributions(1);
 
-      expect(mockPrismaService.ordinaryDistribution.findMany).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.ordinaryDistribution.findMany,
+      ).toHaveBeenCalledWith({
         where: { workConfigId: 1 },
         orderBy: { dayOfWeek: 'asc' },
       });
@@ -534,7 +548,12 @@ describe('WorkConfigService', () => {
   describe('removeDistribution', () => {
     it('debería eliminar una distribución exitosamente', async () => {
       mockPrismaService.workConfig.findUnique.mockResolvedValue(mockWorkConfig);
-      const dist = { id: 1, workConfigId: 1, dayOfWeek: 1, ordinaryMinutesCap: 480 };
+      const dist = {
+        id: 1,
+        workConfigId: 1,
+        dayOfWeek: 1,
+        ordinaryMinutesCap: 480,
+      };
       mockPrismaService.ordinaryDistribution.findUnique.mockResolvedValue(dist);
       mockPrismaService.ordinaryDistribution.delete.mockResolvedValue(dist);
 
@@ -545,7 +564,9 @@ describe('WorkConfigService', () => {
       ).toHaveBeenCalledWith({
         where: { workConfigId_dayOfWeek: { workConfigId: 1, dayOfWeek: 1 } },
       });
-      expect(mockPrismaService.ordinaryDistribution.delete).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.ordinaryDistribution.delete,
+      ).toHaveBeenCalledWith({
         where: { workConfigId_dayOfWeek: { workConfigId: 1, dayOfWeek: 1 } },
       });
       expect(mockAuditService.log).toHaveBeenCalledWith({
@@ -564,9 +585,7 @@ describe('WorkConfigService', () => {
       await expect(service.removeDistribution(1, 99, 1)).rejects.toThrow(
         NotFoundException,
       );
-      await expect(
-        service.removeDistribution(1, 99, 1),
-      ).rejects.toMatchObject({
+      await expect(service.removeDistribution(1, 99, 1)).rejects.toMatchObject({
         response: expect.objectContaining({
           code: 'DISTRIBUCION_NO_ENCONTRADA',
         }),

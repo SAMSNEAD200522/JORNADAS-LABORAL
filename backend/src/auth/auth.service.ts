@@ -75,7 +75,13 @@ export class AuthService {
       const payload = this.jwtService.verify(refreshToken);
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { id: true, email: true, name: true, role: true, isActive: true },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          isActive: true,
+        },
       });
 
       if (!user || !user.isActive) {
@@ -90,7 +96,9 @@ export class AuthService {
 
       const newPayload = { sub: user.id, email: user.email, role: user.role };
       const newAccessToken = this.jwtService.sign(newPayload);
-      const newRefreshToken = this.jwtService.sign(newPayload, { expiresIn: '7d' });
+      const newRefreshToken = this.jwtService.sign(newPayload, {
+        expiresIn: '7d',
+      });
 
       return {
         accessToken: newAccessToken,
@@ -108,6 +116,14 @@ export class AuthService {
   }
 
   async logout(token: string) {
+    if (!token) {
+      return { message: 'Sesión cerrada exitosamente' };
+    }
+    try {
+      this.jwtService.verify(token);
+    } catch {
+      return { message: 'Sesión cerrada exitosamente' };
+    }
     await this.blacklistToken(token);
     return { message: 'Sesión cerrada exitosamente' };
   }

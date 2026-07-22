@@ -2,7 +2,11 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { ReportsService } from './reports.service';
-import { WeeklyQueryDto, MonthlyQueryDto, RangeQueryDto } from './dto/report-query.dto';
+import {
+  WeeklyQueryDto,
+  MonthlyQueryDto,
+  RangeQueryDto,
+} from './dto/report-query.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 
 @ApiTags('Reportes')
@@ -12,7 +16,9 @@ export class ReportsController {
 
   @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA, Role.SUPERVISOR)
   @Get('semanal')
-  @ApiOperation({ summary: 'Resumen semanal por empleado (agrupado por semana ISO)' })
+  @ApiOperation({
+    summary: 'Resumen semanal por empleado (agrupado por semana ISO)',
+  })
   getWeekly(@Query() query: WeeklyQueryDto) {
     return this.reportsService.getWeeklySummary(query);
   }

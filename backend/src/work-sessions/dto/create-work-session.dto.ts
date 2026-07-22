@@ -6,15 +6,24 @@ export class CreateWorkSessionDto {
   @IsInt()
   employeeId: number;
 
-  @ApiProperty({ description: 'Fecha y hora de inicio (ISO 8601)', example: '2026-07-08T07:00:00.000Z' })
+  @ApiProperty({
+    description: 'Fecha y hora de inicio (ISO 8601)',
+    example: '2026-07-08T07:00:00.000Z',
+  })
   @IsDateString()
   startTime: string;
 
-  @ApiProperty({ description: 'Fecha y hora de fin (ISO 8601)', example: '2026-07-08T17:00:00.000Z' })
+  @ApiProperty({
+    description: 'Fecha y hora de fin (ISO 8601)',
+    example: '2026-07-08T17:00:00.000Z',
+  })
   @IsDateString()
   endTime: string;
 
-  @ApiPropertyOptional({ description: 'Día de descanso trabajado', example: true })
+  @ApiPropertyOptional({
+    description: 'Día de descanso trabajado',
+    example: true,
+  })
   @IsOptional()
   @IsBoolean()
   restDayWorked?: boolean;

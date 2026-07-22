@@ -19,7 +19,10 @@ export class QueryWorkSessionDto {
   @IsDateString()
   endDate?: string;
 
-  @ApiPropertyOptional({ description: 'Incluir solo no anuladas', default: true })
+  @ApiPropertyOptional({
+    description: 'Incluir solo no anuladas',
+    default: true,
+  })
   @IsOptional()
   onlyActive?: string;
 

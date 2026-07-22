@@ -12,27 +12,41 @@ import compression from 'compression';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.sheetjs.com", "https://fonts.googleapis.com"],
-        scriptSrcAttr: ["'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        imgSrc: ["'self'", "data:"],
-        connectSrc: ["'self'"],
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://cdn.sheetjs.com',
+            'https://fonts.googleapis.com',
+          ],
+          scriptSrcAttr: ["'unsafe-inline'"],
+          styleSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://fonts.googleapis.com',
+          ],
+          fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+          imgSrc: ["'self'", 'data:'],
+          connectSrc: ["'self'"],
+        },
       },
-    },
-    crossOriginEmbedderPolicy: false,
-  }));
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
   app.use(compression());
 
   app.setGlobalPrefix(config.prefix);
   app.useGlobalPipes(globalValidationPipe);
   app.useGlobalFilters(new AllExceptionsFilter());
+  const corsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
+    : ['http://localhost:3001', 'http://localhost:3000'];
   app.enableCors({
-    origin: ['http://localhost:3001', 'http://localhost:3000'],
+    origin: corsOrigins,
     credentials: true,
   });
 
@@ -40,7 +54,9 @@ async function bootstrap() {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Control y Gestión de Jornadas Laborales')
-    .setDescription('API para el control y gestión de jornadas laborales de empleados')
+    .setDescription(
+      'API para el control y gestión de jornadas laborales de empleados',
+    )
     .setVersion('1.0')
     .addBearerAuth()
     .build();
@@ -52,9 +68,13 @@ async function bootstrap() {
   }
 
   await app.listen(config.port);
-  console.log(`API corriendo en http://localhost:${config.port}${config.prefix}`);
+  console.log(
+    `API corriendo en http://localhost:${config.port}${config.prefix}`,
+  );
   if (process.env.NODE_ENV !== 'production') {
-    console.log(`Documentación Swagger en http://localhost:${config.port}/api/docs`);
+    console.log(
+      `Documentación Swagger en http://localhost:${config.port}/api/docs`,
+    );
   }
 }
 bootstrap();

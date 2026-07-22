@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   UploadedFile,
   UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -35,7 +36,11 @@ export class ImportController {
 
   @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA)
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
   @ApiOperation({ summary: 'Subir archivo para importación' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -49,7 +54,11 @@ export class ImportController {
   @ApiOkResponse({ description: 'Ruta del archivo guardado' })
   uploadFile(@UploadedFile() file: any) {
     if (!file) {
-      return { error: 'No se proporcionó ningún archivo' };
+      throw new BadRequestException({
+        statusCode: 400,
+        message: 'No se proporcionó ningún archivo',
+        code: 'ARCHIVO_REQUERIDO',
+      });
     }
     const result = this.importService.handleFileUpload(file);
     return result;

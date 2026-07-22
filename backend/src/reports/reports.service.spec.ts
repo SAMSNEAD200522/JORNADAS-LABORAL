@@ -31,7 +31,13 @@ describe('ReportsService', () => {
   describe('getWeeklySummary', () => {
     it('debe retornar resumen semanal con datos', async () => {
       mockPrisma.employee.findMany.mockResolvedValue([
-        { id: 1, firstName: 'Carlos', lastName: 'Pérez', documentNumber: '123', area: 'IT' },
+        {
+          id: 1,
+          firstName: 'Carlos',
+          lastName: 'Pérez',
+          documentNumber: '123',
+          area: 'IT',
+        },
       ]);
       mockPrisma.workSession.groupBy.mockResolvedValue([
         {
@@ -73,7 +79,13 @@ describe('ReportsService', () => {
   describe('getMonthlySummary', () => {
     it('debe retornar resumen mensual', async () => {
       mockPrisma.employee.findMany.mockResolvedValue([
-        { id: 1, firstName: 'Ana', lastName: 'García', documentNumber: '456', area: 'RRHH' },
+        {
+          id: 1,
+          firstName: 'Ana',
+          lastName: 'García',
+          documentNumber: '456',
+          area: 'RRHH',
+        },
       ]);
       mockPrisma.workSession.groupBy.mockResolvedValue([
         {
@@ -102,7 +114,13 @@ describe('ReportsService', () => {
   describe('getRangeSummary', () => {
     it('debe retornar resumen por rango', async () => {
       mockPrisma.employee.findMany.mockResolvedValue([
-        { id: 1, firstName: 'Luis', lastName: 'López', documentNumber: '789', area: 'IT' },
+        {
+          id: 1,
+          firstName: 'Luis',
+          lastName: 'López',
+          documentNumber: '789',
+          area: 'IT',
+        },
       ]);
       mockPrisma.workSession.groupBy.mockResolvedValue([
         {

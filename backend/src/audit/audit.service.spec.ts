@@ -41,7 +41,10 @@ describe('AuditService', () => {
       expect(result).toHaveProperty('id', 1);
       expect(mockPrisma.auditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ action: 'CREAR', entity: 'Empleado' }),
+          data: expect.objectContaining({
+            action: 'CREAR',
+            entity: 'Empleado',
+          }),
         }),
       );
     });
@@ -49,7 +52,9 @@ describe('AuditService', () => {
 
   describe('findAll', () => {
     it('debe retornar lista paginada de auditoría', async () => {
-      mockPrisma.auditLog.findMany.mockResolvedValue([{ id: 1, action: 'CREAR' }]);
+      mockPrisma.auditLog.findMany.mockResolvedValue([
+        { id: 1, action: 'CREAR' },
+      ]);
       mockPrisma.auditLog.count.mockResolvedValue(1);
 
       const result = await service.findAll({ page: 1, limit: 20 });

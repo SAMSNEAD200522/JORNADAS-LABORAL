@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateWorkConfigDto } from './dto/create-work-config.dto';
@@ -96,11 +100,19 @@ export class WorkConfigService {
       where: { id },
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
-        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.description !== undefined
+          ? { description: dto.description }
+          : {}),
         ...(dto.modality !== undefined ? { modality: dto.modality } : {}),
-        ...(dto.breakMinutes !== undefined ? { breakMinutes: dto.breakMinutes } : {}),
-        ...(dto.breakThresholdMinutes !== undefined ? { breakThresholdMinutes: dto.breakThresholdMinutes } : {}),
-        ...(dto.weeklyTargetMinutes !== undefined ? { weeklyTargetMinutes: dto.weeklyTargetMinutes } : {}),
+        ...(dto.breakMinutes !== undefined
+          ? { breakMinutes: dto.breakMinutes }
+          : {}),
+        ...(dto.breakThresholdMinutes !== undefined
+          ? { breakThresholdMinutes: dto.breakThresholdMinutes }
+          : {}),
+        ...(dto.weeklyTargetMinutes !== undefined
+          ? { weeklyTargetMinutes: dto.weeklyTargetMinutes }
+          : {}),
       },
     });
 
@@ -133,7 +145,11 @@ export class WorkConfigService {
     return updated;
   }
 
-  async assignToEmployee(configId: number, employeeId: number, userId?: number) {
+  async assignToEmployee(
+    configId: number,
+    employeeId: number,
+    userId?: number,
+  ) {
     await this.findOne(configId);
 
     const employee = await this.prisma.employee.findUnique({
@@ -165,12 +181,19 @@ export class WorkConfigService {
 
   // ─── OrdinaryDistribution ─────────────────────────────────────
 
-  async upsertDistribution(configId: number, dto: CreateOrdinaryDistributionDto, userId?: number) {
+  async upsertDistribution(
+    configId: number,
+    dto: CreateOrdinaryDistributionDto,
+    userId?: number,
+  ) {
     await this.findOne(configId);
 
     const dist = await this.prisma.ordinaryDistribution.upsert({
       where: {
-        workConfigId_dayOfWeek: { workConfigId: configId, dayOfWeek: dto.dayOfWeek },
+        workConfigId_dayOfWeek: {
+          workConfigId: configId,
+          dayOfWeek: dto.dayOfWeek,
+        },
       },
       update: { ordinaryMinutesCap: dto.ordinaryMinutesCap },
       create: {
@@ -199,7 +222,11 @@ export class WorkConfigService {
     });
   }
 
-  async removeDistribution(configId: number, dayOfWeek: number, userId?: number) {
+  async removeDistribution(
+    configId: number,
+    dayOfWeek: number,
+    userId?: number,
+  ) {
     await this.findOne(configId);
 
     const dist = await this.prisma.ordinaryDistribution.findUnique({

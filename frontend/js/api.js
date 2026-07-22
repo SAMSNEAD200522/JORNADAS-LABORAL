@@ -1,4 +1,10 @@
-const API = 'http://localhost:3000/api/v1';
+const API = (() => {
+  if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+    return '/api/v1';
+  }
+  const loc = window.location;
+  return `${loc.protocol}//${loc.hostname}:${loc.port || '3000'}/api/v1`;
+})();
 
 async function request(method, path, body) {
   const token = localStorage.getItem('token');

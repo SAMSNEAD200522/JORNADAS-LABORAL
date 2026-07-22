@@ -766,11 +766,24 @@ export class ImportService {
         const end = new Date(fecha);
         end.setHours(17, 0, 0, 0);
 
+        const exitTime = String(data['SALIDA TEORICA'] ?? '').trim();
+        if (exitTime && /^\d{1,2}:\d{2}$/.test(exitTime)) {
+          const [h, m] = exitTime.split(':').map(Number);
+          end.setHours(h, m, 0, 0);
+        }
+
+        const totalMinutes = Math.max(
+          0,
+          Math.round((end.getTime() - start.getTime()) / 60000),
+        );
+
         await tx.workSession.create({
           data: {
             employeeId,
             startTime: start,
             endTime: end,
+            totalMinutes,
+            ordinaryMinutes: totalMinutes,
           },
         });
         inserted++;
@@ -1118,10 +1131,28 @@ export class ImportService {
       });
     }
 
+    const resolvedBackup = path.resolve(backupPath);
+    const backupsDir = path.resolve(path.dirname(dbPath), 'backups');
+    if (!resolvedBackup.startsWith(backupsDir + path.sep)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: 'Ruta de backup no permitida',
+        code: 'BACKUP_RUTA_NO_PERMITIDA',
+      });
+    }
+
+    if (!fs.existsSync(resolvedBackup)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: 'El archivo de backup no existe',
+        code: 'BACKUP_NO_ENCONTRADO',
+      });
+    }
+
     await this.prisma.$disconnect();
 
     await new Promise<void>((resolve, reject) => {
-      fs.copyFile(backupPath, dbPath, (err) => {
+      fs.copyFile(resolvedBackup, dbPath, (err) => {
         if (err) reject(err);
         else resolve();
       });
@@ -1139,15 +1170,29 @@ export class ImportService {
       });
     }
 
-    if (!fs.existsSync(filePath)) {
+    const resolved = path.resolve(filePath);
+    const uploadsDir = path.resolve(process.cwd(), 'uploads', 'imports');
+
+    if (
+      !resolved.startsWith(uploadsDir + path.sep) &&
+      resolved !== uploadsDir
+    ) {
       throw new BadRequestException({
         statusCode: 400,
-        message: `El archivo no existe en la ruta: ${filePath}`,
+        message: 'Ruta de archivo no permitida',
+        code: 'RUTA_NO_PERMITIDA',
+      });
+    }
+
+    if (!fs.existsSync(resolved)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: 'El archivo no existe',
         code: 'ARCHIVO_NO_ENCONTRADO',
       });
     }
 
-    return fs.readFileSync(filePath);
+    return fs.readFileSync(resolved);
   }
 
   private getDatabasePath(): string {

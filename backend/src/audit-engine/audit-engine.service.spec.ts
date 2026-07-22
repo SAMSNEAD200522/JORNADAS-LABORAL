@@ -45,7 +45,11 @@ describe('AuditEngineService', () => {
 
   it('should return a complete AuditTrace for a regular workday', () => {
     const trace = service.trace(makeInput(), {
-      id: 1, name: 'Juan Pérez', documentNumber: '123456', modality: 'ADMINISTRATIVO', configName: 'Estándar',
+      id: 1,
+      name: 'Juan Pérez',
+      documentNumber: '123456',
+      modality: 'ADMINISTRATIVO',
+      configName: 'Estándar',
     });
 
     expect(trace.generalInfo).toBeDefined();
@@ -65,7 +69,11 @@ describe('AuditEngineService', () => {
   it('should produce same total as labor engine classify', () => {
     const input = makeInput();
     const trace = service.trace(input, {
-      id: 1, name: 'Test', documentNumber: '000', modality: 'ADMINISTRATIVO', configName: 'Test',
+      id: 1,
+      name: 'Test',
+      documentNumber: '000',
+      modality: 'ADMINISTRATIVO',
+      configName: 'Test',
     });
 
     expect(trace.finalResult.totalMinutes).toBe(600);
@@ -80,7 +88,11 @@ describe('AuditEngineService', () => {
       ordinaryDistributions: adminDists([1, 2, 3, 4, 5], 360),
     });
     const trace = service.trace(input, {
-      id: 1, name: 'Test', documentNumber: '000', modality: 'ADMINISTRATIVO', configName: 'Test',
+      id: 1,
+      name: 'Test',
+      documentNumber: '000',
+      modality: 'ADMINISTRATIVO',
+      configName: 'Test',
     });
 
     const result = trace.finalResult;
@@ -100,7 +112,11 @@ describe('AuditEngineService', () => {
       ordinaryDistributions: adminDists([5], 480),
     });
     const trace = service.trace(input, {
-      id: 1, name: 'Test', documentNumber: '000', modality: 'ADMINISTRATIVO', configName: 'Test',
+      id: 1,
+      name: 'Test',
+      documentNumber: '000',
+      modality: 'ADMINISTRATIVO',
+      configName: 'Test',
     });
 
     const result = trace.finalResult;
@@ -119,7 +135,11 @@ describe('AuditEngineService', () => {
       accumulatedWeekMinutes: 0,
     });
     const trace = service.trace(input, {
-      id: 1, name: 'Test', documentNumber: '000', modality: 'ADMINISTRATIVO', configName: 'Test',
+      id: 1,
+      name: 'Test',
+      documentNumber: '000',
+      modality: 'ADMINISTRATIVO',
+      configName: 'Test',
     });
 
     expect(trace.finalResult.ordinarioNocturno).toBe(600);
@@ -137,7 +157,11 @@ describe('AuditEngineService', () => {
       })),
     });
     const trace = service.trace(input, {
-      id: 1, name: 'Test', documentNumber: '000', modality: 'ADMINISTRATIVO', configName: 'Test',
+      id: 1,
+      name: 'Test',
+      documentNumber: '000',
+      modality: 'ADMINISTRATIVO',
+      configName: 'Test',
     });
 
     expect(trace.finalResult.dominicalFestivoDiurno).toBe(480);
@@ -153,7 +177,11 @@ describe('AuditEngineService', () => {
       holidays: [localDate('2026-07-20')],
     });
     const trace = service.trace(input, {
-      id: 1, name: 'Test', documentNumber: '000', modality: 'ADMINISTRATIVO', configName: 'Test',
+      id: 1,
+      name: 'Test',
+      documentNumber: '000',
+      modality: 'ADMINISTRATIVO',
+      configName: 'Test',
     });
 
     expect(trace.finalResult.dominicalFestivoDiurno).toBe(360);
@@ -164,10 +192,14 @@ describe('AuditEngineService', () => {
 
   it('should have all validations passing for a normal workday', () => {
     const trace = service.trace(makeInput(), {
-      id: 1, name: 'Test', documentNumber: '000', modality: 'ADMINISTRATIVO', configName: 'Test',
+      id: 1,
+      name: 'Test',
+      documentNumber: '000',
+      modality: 'ADMINISTRATIVO',
+      configName: 'Test',
     });
 
-    const failed = trace.validations.filter(v => !v.passed);
+    const failed = trace.validations.filter((v) => !v.passed);
     expect(failed.length).toBe(0);
   });
 
@@ -192,34 +224,40 @@ describe('AuditEngineService', () => {
   });
 
   it('should record break application reasoning', () => {
-    const trace = service.trace(makeInput({
-      startTime: makeDate('2026-07-13T07:00:00'),
-      endTime: makeDate('2026-07-13T17:00:00'),
-      breakMinutes: 60,
-    }));
+    const trace = service.trace(
+      makeInput({
+        startTime: makeDate('2026-07-13T07:00:00'),
+        endTime: makeDate('2026-07-13T17:00:00'),
+        breakMinutes: 60,
+      }),
+    );
     expect(trace.breakApplication.breakMinutes).toBe(60);
     expect(trace.breakApplication.effectiveMinutes).toBe(540);
     expect(trace.breakApplication.reasoning).toContain('60');
   });
 
   it('should cap break at total minutes', () => {
-    const trace = service.trace(makeInput({
-      startTime: makeDate('2026-07-13T07:00:00'),
-      endTime: makeDate('2026-07-13T07:30:00'),
-      breakMinutes: 60,
-    }));
+    const trace = service.trace(
+      makeInput({
+        startTime: makeDate('2026-07-13T07:00:00'),
+        endTime: makeDate('2026-07-13T07:30:00'),
+        breakMinutes: 60,
+      }),
+    );
     expect(trace.breakApplication.breakMinutes).toBe(30);
     expect(trace.breakApplication.effectiveMinutes).toBe(0);
   });
 
   it('should track weekly accumulation', () => {
-    const trace = service.trace(makeInput({
-      startTime: makeDate('2026-07-13T07:00:00'),
-      endTime: makeDate('2026-07-13T17:00:00'),
-      accumulatedWeekMinutes: 1800,
-      weeklyTargetMinutes: 2520,
-      ordinaryDistributions: adminDists([1, 2, 3, 4, 5], 360),
-    }));
+    const trace = service.trace(
+      makeInput({
+        startTime: makeDate('2026-07-13T07:00:00'),
+        endTime: makeDate('2026-07-13T17:00:00'),
+        accumulatedWeekMinutes: 1800,
+        weeklyTargetMinutes: 2520,
+        ordinaryDistributions: adminDists([1, 2, 3, 4, 5], 360),
+      }),
+    );
     expect(trace.weeklyAccumulation.beforeMinutes).toBe(1800);
     expect(trace.weeklyAccumulation.afterMinutes).toBe(1800 + 360);
     expect(trace.weeklyAccumulation.targetMinutes).toBe(2520);
@@ -237,7 +275,11 @@ describe('AuditEngineService', () => {
 
   it('should include territory config in generalInfo', () => {
     const trace = service.trace(makeInput(), {
-      id: 1, name: 'Test', documentNumber: '000', modality: 'ADMINISTRATIVO', configName: 'Test',
+      id: 1,
+      name: 'Test',
+      documentNumber: '000',
+      modality: 'ADMINISTRATIVO',
+      configName: 'Test',
     });
     expect(trace.generalInfo.territoryConfig).toBeDefined();
   });

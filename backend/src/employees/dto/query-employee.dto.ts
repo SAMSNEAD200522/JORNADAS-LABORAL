@@ -3,7 +3,9 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type, Transform } from 'class-transformer';
 
 export class QueryEmployeeDto {
-  @ApiPropertyOptional({ description: 'Búsqueda general (nombre, apellido o documento)' })
+  @ApiPropertyOptional({
+    description: 'Búsqueda general (nombre, apellido o documento)',
+  })
   @IsOptional()
   @IsString()
   search?: string;
@@ -61,10 +63,23 @@ export class QueryEmployeeDto {
   @ApiPropertyOptional({ description: 'Campo de ordenamiento', default: 'id' })
   @IsOptional()
   @IsString()
-  @IsIn(['id', 'firstName', 'lastName', 'documentNumber', 'area', 'position', 'hireDate', 'createdAt', 'updatedAt'])
+  @IsIn([
+    'id',
+    'firstName',
+    'lastName',
+    'documentNumber',
+    'area',
+    'position',
+    'hireDate',
+    'createdAt',
+    'updatedAt',
+  ])
   sortBy?: string = 'id';
 
-  @ApiPropertyOptional({ description: 'Dirección de ordenamiento', default: 'asc' })
+  @ApiPropertyOptional({
+    description: 'Dirección de ordenamiento',
+    default: 'asc',
+  })
   @IsOptional()
   @IsString()
   @IsIn(['asc', 'desc'])

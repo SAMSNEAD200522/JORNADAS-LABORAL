@@ -338,6 +338,17 @@ pub async fn rollback_import(
     backup_file: String,
 ) -> Result<(), String> {
     let backup_path = PathBuf::from(&backup_file);
+
+    let canonical = backup_path.canonicalize().map_err(|e| format!("Cannot resolve backup path: {}", e))?;
+    let canonical_str = canonical.to_string_lossy().to_string();
+    let backup_dir_canonical = config.backup_dir.canonicalize()
+        .map_err(|e| format!("Cannot resolve backup directory: {}", e))?;
+    let backup_dir_str = backup_dir_canonical.to_string_lossy().to_string();
+
+    if !canonical_str.starts_with(&backup_dir_str) {
+        return Err("Backup path must be within the backup directory".to_string());
+    }
+
     backup::restore_database(&backup_path, &config.db_path)
 }
 

@@ -45,8 +45,12 @@ describe('AuthService', () => {
 
     it('debe retornar token con credenciales válidas', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
-        id: 1, email: 'admin@empresa.com', passwordHash: 'hashed',
-        name: 'Admin', role: 'ADMINISTRADOR', isActive: true,
+        id: 1,
+        email: 'admin@empresa.com',
+        passwordHash: 'hashed',
+        name: 'Admin',
+        role: 'ADMINISTRADOR',
+        isActive: true,
       });
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
@@ -61,7 +65,9 @@ describe('AuthService', () => {
 
     it('debe rechazar email inexistente', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
-      await expect(service.login(validDto)).rejects.toThrow(UnauthorizedException);
+      await expect(service.login(validDto)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('debe lanzar código CREDENCIALES_INVALIDAS para email inexistente', async () => {
@@ -69,44 +75,65 @@ describe('AuthService', () => {
       try {
         await service.login(validDto);
       } catch (e) {
-        const response = (e as UnauthorizedException).getResponse() as Record<string, unknown>;
+        const response = (e as UnauthorizedException).getResponse() as Record<
+          string,
+          unknown
+        >;
         expect(response.code).toBe('CREDENCIALES_INVALIDAS');
       }
     });
 
     it('debe rechazar usuario inactivo', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
-        id: 1, email: 'admin@empresa.com', passwordHash: 'hashed',
-        name: 'Admin', role: 'ADMINISTRADOR', isActive: false,
+        id: 1,
+        email: 'admin@empresa.com',
+        passwordHash: 'hashed',
+        name: 'Admin',
+        role: 'ADMINISTRADOR',
+        isActive: false,
       });
       try {
         await service.login(validDto);
       } catch (e) {
         expect(e).toBeInstanceOf(UnauthorizedException);
-        const response = (e as UnauthorizedException).getResponse() as Record<string, unknown>;
+        const response = (e as UnauthorizedException).getResponse() as Record<
+          string,
+          unknown
+        >;
         expect(response.code).toBe('USUARIO_INACTIVO');
       }
     });
 
     it('debe rechazar contraseña incorrecta', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
-        id: 1, email: 'admin@empresa.com', passwordHash: 'hashed',
-        name: 'Admin', role: 'ADMINISTRADOR', isActive: true,
+        id: 1,
+        email: 'admin@empresa.com',
+        passwordHash: 'hashed',
+        name: 'Admin',
+        role: 'ADMINISTRADOR',
+        isActive: true,
       });
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
       try {
         await service.login(validDto);
       } catch (e) {
         expect(e).toBeInstanceOf(UnauthorizedException);
-        const response = (e as UnauthorizedException).getResponse() as Record<string, unknown>;
+        const response = (e as UnauthorizedException).getResponse() as Record<
+          string,
+          unknown
+        >;
         expect(response.code).toBe('CREDENCIALES_INVALIDAS');
       }
     });
 
     it('debe retornar tokenType Bearer', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
-        id: 1, email: 'a@b.com', passwordHash: 'h',
-        name: 'A', role: 'SUPERVISOR', isActive: true,
+        id: 1,
+        email: 'a@b.com',
+        passwordHash: 'h',
+        name: 'A',
+        role: 'SUPERVISOR',
+        isActive: true,
       });
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       const result = await service.login(validDto);
@@ -119,9 +146,16 @@ describe('AuthService', () => {
 
     it('debe refrescar tokens exitosamente', async () => {
       mockPrisma.blacklistedToken.findUnique.mockResolvedValue(null);
-      mockJwtService.verify.mockReturnValue({ ...validPayload, exp: 9999999999 });
+      mockJwtService.verify.mockReturnValue({
+        ...validPayload,
+        exp: 9999999999,
+      });
       mockPrisma.user.findUnique.mockResolvedValue({
-        id: 1, email: 'a@b.com', name: 'A', role: 'ADMINISTRADOR', isActive: true,
+        id: 1,
+        email: 'a@b.com',
+        name: 'A',
+        role: 'ADMINISTRADOR',
+        isActive: true,
       });
       mockPrisma.blacklistedToken.create.mockResolvedValue({});
       mockJwtService.sign.mockReturnValue('new-token');
@@ -133,44 +167,86 @@ describe('AuthService', () => {
     });
 
     it('debe rechazar token en lista negra', async () => {
-      mockPrisma.blacklistedToken.findUnique.mockResolvedValue({ id: 1, token: 'revoked', expiresAt: new Date() });
-      await expect(service.refresh('revoked')).rejects.toThrow(UnauthorizedException);
+      mockPrisma.blacklistedToken.findUnique.mockResolvedValue({
+        id: 1,
+        token: 'revoked',
+        expiresAt: new Date(),
+      });
+      await expect(service.refresh('revoked')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('debe lanzar TOKEN_INVALIDO cuando el token está en lista negra', async () => {
-      mockPrisma.blacklistedToken.findUnique.mockResolvedValue({ id: 1, token: 'x', expiresAt: new Date() });
+      mockPrisma.blacklistedToken.findUnique.mockResolvedValue({
+        id: 1,
+        token: 'x',
+        expiresAt: new Date(),
+      });
       try {
         await service.refresh('revoked');
       } catch (e) {
-        const response = (e as UnauthorizedException).getResponse() as Record<string, unknown>;
+        const response = (e as UnauthorizedException).getResponse() as Record<
+          string,
+          unknown
+        >;
         expect(response.code).toBe('TOKEN_INVALIDO');
       }
     });
 
     it('debe rechazar token JWT inválido o expirado', async () => {
       mockPrisma.blacklistedToken.findUnique.mockResolvedValue(null);
-      mockJwtService.verify.mockImplementation(() => { throw new Error('jwt expired'); });
-      await expect(service.refresh('bad-token')).rejects.toThrow(UnauthorizedException);
+      mockJwtService.verify.mockImplementation(() => {
+        throw new Error('jwt expired');
+      });
+      await expect(service.refresh('bad-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('debe rechazar refresh si el usuario ya no existe', async () => {
       mockPrisma.blacklistedToken.findUnique.mockResolvedValue(null);
-      mockJwtService.verify.mockReturnValue({ sub: 999, email: 'x@x.com', role: 'SUPERVISOR', exp: 9999999999 });
+      mockJwtService.verify.mockReturnValue({
+        sub: 999,
+        email: 'x@x.com',
+        role: 'SUPERVISOR',
+        exp: 9999999999,
+      });
       mockPrisma.user.findUnique.mockResolvedValue(null);
-      await expect(service.refresh('token')).rejects.toThrow(UnauthorizedException);
+      await expect(service.refresh('token')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('debe rechazar refresh si el usuario está inactivo', async () => {
       mockPrisma.blacklistedToken.findUnique.mockResolvedValue(null);
-      mockJwtService.verify.mockReturnValue({ sub: 1, email: 'x@x.com', role: 'SUPERVISOR', exp: 9999999999 });
+      mockJwtService.verify.mockReturnValue({
+        sub: 1,
+        email: 'x@x.com',
+        role: 'SUPERVISOR',
+        exp: 9999999999,
+      });
       mockPrisma.user.findUnique.mockResolvedValue({ id: 1, isActive: false });
-      await expect(service.refresh('token')).rejects.toThrow(UnauthorizedException);
+      await expect(service.refresh('token')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('debe blacklishear el token viejo antes de emitir nuevos', async () => {
       mockPrisma.blacklistedToken.findUnique.mockResolvedValue(null);
-      mockJwtService.verify.mockReturnValue({ sub: 1, email: 'a@b.com', role: 'ADMINISTRADOR', exp: 9999999999 });
-      mockPrisma.user.findUnique.mockResolvedValue({ id: 1, email: 'a@b.com', name: 'A', role: 'ADMINISTRADOR', isActive: true });
+      mockJwtService.verify.mockReturnValue({
+        sub: 1,
+        email: 'a@b.com',
+        role: 'ADMINISTRADOR',
+        exp: 9999999999,
+      });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: 1,
+        email: 'a@b.com',
+        name: 'A',
+        role: 'ADMINISTRADOR',
+        isActive: true,
+      });
       mockPrisma.blacklistedToken.create.mockResolvedValue({});
       mockJwtService.sign.mockReturnValue('new');
 
@@ -193,7 +269,11 @@ describe('AuthService', () => {
     });
 
     it('debe manejar token ya blacklisteado sin error', async () => {
-      mockPrisma.blacklistedToken.findUnique.mockResolvedValue({ id: 1, token: 'x', expiresAt: new Date() });
+      mockPrisma.blacklistedToken.findUnique.mockResolvedValue({
+        id: 1,
+        token: 'x',
+        expiresAt: new Date(),
+      });
       const result = await service.logout('my-token');
       expect(result).toHaveProperty('message');
       expect(mockPrisma.blacklistedToken.create).not.toHaveBeenCalled();
@@ -228,15 +308,21 @@ describe('AuthService', () => {
 
     it('debe usar 7 días como fallback si verify falla', async () => {
       mockPrisma.blacklistedToken.findUnique.mockResolvedValue(null);
-      mockJwtService.verify.mockImplementation(() => { throw new Error('bad'); });
+      mockJwtService.verify.mockImplementation(() => {
+        throw new Error('bad');
+      });
       mockPrisma.blacklistedToken.create.mockResolvedValue({});
 
       const before = Date.now();
       await service.logout('tok');
       const call = mockPrisma.blacklistedToken.create.mock.calls[0][0];
       const expiresAt = call.data.expiresAt.getTime();
-      expect(expiresAt).toBeGreaterThanOrEqual(before + 7 * 24 * 60 * 60 * 1000 - 1000);
-      expect(expiresAt).toBeLessThanOrEqual(before + 7 * 24 * 60 * 60 * 1000 + 1000);
+      expect(expiresAt).toBeGreaterThanOrEqual(
+        before + 7 * 24 * 60 * 60 * 1000 - 1000,
+      );
+      expect(expiresAt).toBeLessThanOrEqual(
+        before + 7 * 24 * 60 * 60 * 1000 + 1000,
+      );
     });
 
     it('no debe duplicar si el token ya existe en la BD', async () => {

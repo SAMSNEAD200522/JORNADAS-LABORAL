@@ -6,7 +6,10 @@ export class CreateHolidayDto {
   @IsDateString()
   date: string;
 
-  @ApiProperty({ description: 'Nombre del festivo', example: 'Día de la Independencia' })
+  @ApiProperty({
+    description: 'Nombre del festivo',
+    example: 'Día de la Independencia',
+  })
   @IsString()
   @MaxLength(200)
   name: string;

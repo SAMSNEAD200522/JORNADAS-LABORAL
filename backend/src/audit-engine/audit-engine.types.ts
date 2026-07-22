@@ -1,4 +1,4 @@
-import { EngineInput, EngineOutput } from '../labor-engine/labor-engine.types';
+import { EngineOutput } from '../labor-engine/labor-engine.types';
 
 export interface AuditTrace {
   generalInfo: GeneralInfo;

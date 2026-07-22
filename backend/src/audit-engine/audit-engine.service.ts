@@ -21,13 +21,16 @@ import {
 
 @Injectable()
 export class AuditEngineService {
-  trace(input: EngineInput, employeeInfo?: {
-    id: number;
-    name: string;
-    documentNumber: string;
-    modality: string;
-    configName: string;
-  }): AuditTrace {
+  trace(
+    input: EngineInput,
+    employeeInfo?: {
+      id: number;
+      name: string;
+      documentNumber: string;
+      modality: string;
+      configName: string;
+    },
+  ): AuditTrace {
     const {
       startTime,
       endTime,
@@ -47,13 +50,24 @@ export class AuditEngineService {
       return this.emptyTrace(input, employeeInfo);
     }
 
-    const effectiveBreak = Math.min(breakMinutes ?? DEFAULT_BREAK_MINUTES, totalMinutes);
+    const effectiveBreak = Math.min(
+      breakMinutes ?? DEFAULT_BREAK_MINUTES,
+      totalMinutes,
+    );
     const effectiveMinutes = totalMinutes - effectiveBreak;
 
-    const generalInfo = this.buildGeneralInfo(input, totalMinutes, employeeInfo);
+    const generalInfo = this.buildGeneralInfo(
+      input,
+      totalMinutes,
+      employeeInfo,
+    );
     const inputData = this.buildInputData(input, totalMinutes);
     const configUsed = this.buildConfigUsed(input);
-    const breakApplication = this.buildBreakApplication(totalMinutes, effectiveBreak, effectiveMinutes);
+    const breakApplication = this.buildBreakApplication(
+      totalMinutes,
+      effectiveBreak,
+      effectiveMinutes,
+    );
 
     const timeline: MinuteClassification[] = [];
     const output = this.emptyOutput(totalMinutes, effectiveBreak);
@@ -98,7 +112,12 @@ export class AuditEngineService {
         weeklyUsed++;
       }
 
-      const bucketName = this.classifyMinuteToBucket(output, isRestDay, isNight, isOrdinary);
+      const bucketName = this.classifyMinuteToBucket(
+        output,
+        isRestDay,
+        isNight,
+        isOrdinary,
+      );
 
       timeline.push({
         minuteIndex: i,
@@ -124,13 +143,20 @@ export class AuditEngineService {
 
     output.liquidableMinutes = effectiveMinutes;
 
-    const legalClassification = this.buildLegalClassification(output, effectiveMinutes);
+    const legalClassification = this.buildLegalClassification(
+      output,
+      effectiveMinutes,
+    );
     const weeklyAccumulation = this.buildWeeklyAccumulation(
       accumulatedWeekMinutes,
       weeklyUsed,
       weeklyTargetMinutes,
     );
-    const validations = this.buildValidations(output, effectiveMinutes, timeline);
+    const validations = this.buildValidations(
+      output,
+      effectiveMinutes,
+      timeline,
+    );
 
     return {
       generalInfo,
@@ -154,26 +180,54 @@ export class AuditEngineService {
   ): string {
     if (isRestDay) {
       if (isOrdinary) {
-        if (isNight) { output.dominicalFestivoNocturno++; return 'dominicalFestivoNocturno'; }
-        else { output.dominicalFestivoDiurno++; return 'dominicalFestivoDiurno'; }
+        if (isNight) {
+          output.dominicalFestivoNocturno++;
+          return 'dominicalFestivoNocturno';
+        } else {
+          output.dominicalFestivoDiurno++;
+          return 'dominicalFestivoDiurno';
+        }
       } else {
-        if (isNight) { output.extraDominicalFestivoNocturno++; return 'extraDominicalFestivoNocturno'; }
-        else { output.extraDominicalFestivoDiurno++; return 'extraDominicalFestivoDiurno'; }
+        if (isNight) {
+          output.extraDominicalFestivoNocturno++;
+          return 'extraDominicalFestivoNocturno';
+        } else {
+          output.extraDominicalFestivoDiurno++;
+          return 'extraDominicalFestivoDiurno';
+        }
       }
     } else {
       if (isOrdinary) {
-        if (isNight) { output.ordinarioNocturno++; return 'ordinarioNocturno'; }
-        else { output.ordinarioDiurno++; return 'ordinarioDiurno'; }
+        if (isNight) {
+          output.ordinarioNocturno++;
+          return 'ordinarioNocturno';
+        } else {
+          output.ordinarioDiurno++;
+          return 'ordinarioDiurno';
+        }
       } else {
-        if (isNight) { output.extraNocturno++; return 'extraNocturno'; }
-        else { output.extraDiurno++; return 'extraDiurno'; }
+        if (isNight) {
+          output.extraNocturno++;
+          return 'extraNocturno';
+        } else {
+          output.extraDiurno++;
+          return 'extraDiurno';
+        }
       }
     }
   }
 
-  private buildGeneralInfo(input: EngineInput, totalMinutes: number, employeeInfo?: {
-    id: number; name: string; documentNumber: string; modality: string; configName: string;
-  }): GeneralInfo {
+  private buildGeneralInfo(
+    input: EngineInput,
+    totalMinutes: number,
+    employeeInfo?: {
+      id: number;
+      name: string;
+      documentNumber: string;
+      modality: string;
+      configName: string;
+    },
+  ): GeneralInfo {
     return {
       employeeId: employeeInfo?.id ?? 0,
       employeeName: employeeInfo?.name ?? 'Desconocido',
@@ -224,12 +278,16 @@ export class AuditEngineService {
         'Recargo nocturno ordinario': 0.35,
         'Hora extra diurna': 0.25,
         'Hora extra nocturna': 0.75,
-        'Recargo dominical/festivo': 0.90,
+        'Recargo dominical/festivo': 0.9,
       },
     };
   }
 
-  private buildBreakApplication(totalMinutes: number, effectiveBreak: number, effectiveMinutes: number): BreakApplication {
+  private buildBreakApplication(
+    totalMinutes: number,
+    effectiveBreak: number,
+    effectiveMinutes: number,
+  ): BreakApplication {
     return {
       totalMinutes,
       breakMinutes: effectiveBreak,
@@ -238,25 +296,84 @@ export class AuditEngineService {
     };
   }
 
-  private buildLegalClassification(output: EngineOutput, effectiveMinutes: number): LegalClassification {
-    const bucketDefs: Array<{ name: string; key: string; value: number; legalBase: string; description: string }> = [
-      { name: 'Ordinario diurno', key: 'ordinarioDiurno', value: output.ordinarioDiurno, legalBase: 'Art. 161 CST', description: 'Trabajo ordinario en horario diurno (06:00-19:00)' },
-      { name: 'Ordinario nocturno', key: 'ordinarioNocturno', value: output.ordinarioNocturno, legalBase: 'Art. 160 + 168.1 CST', description: 'Trabajo ordinario en horario nocturno (19:00-06:00)' },
-      { name: 'Extra diurno', key: 'extraDiurno', value: output.extraDiurno, legalBase: 'Art. 159 + 168.2 CST', description: 'Hora extra en horario diurno' },
-      { name: 'Extra nocturno', key: 'extraNocturno', value: output.extraNocturno, legalBase: 'Art. 159 + 168.3 CST', description: 'Hora extra en horario nocturno (no acumula con recargo nocturno 35%)' },
-      { name: 'Dominical/Festivo diurno', key: 'dominicalFestivoDiurno', value: output.dominicalFestivoDiurno, legalBase: 'Art. 179 + Ley 2466 Art. 14', description: 'Trabajo ordinario en domingo/festivo, horario diurno' },
-      { name: 'Dominical/Festivo nocturno', key: 'dominicalFestivoNocturno', value: output.dominicalFestivoNocturno, legalBase: 'Art. 179 + 168.1 + Ley 2466', description: 'Trabajo ordinario en domingo/festivo, horario nocturno' },
-      { name: 'Extra Dominical/Festivo diurno', key: 'extraDominicalFestivoDiurno', value: output.extraDominicalFestivoDiurno, legalBase: 'Art. 179 + 168.2 + Ley 2466', description: 'Hora extra en domingo/festivo, horario diurno' },
-      { name: 'Extra Dominical/Festivo nocturno', key: 'extraDominicalFestivoNocturno', value: output.extraDominicalFestivoNocturno, legalBase: 'Art. 179 + 168.3 + Ley 2466', description: 'Hora extra en domingo/festivo, horario nocturno' },
+  private buildLegalClassification(
+    output: EngineOutput,
+    effectiveMinutes: number,
+  ): LegalClassification {
+    const bucketDefs: Array<{
+      name: string;
+      key: string;
+      value: number;
+      legalBase: string;
+      description: string;
+    }> = [
+      {
+        name: 'Ordinario diurno',
+        key: 'ordinarioDiurno',
+        value: output.ordinarioDiurno,
+        legalBase: 'Art. 161 CST',
+        description: 'Trabajo ordinario en horario diurno (06:00-19:00)',
+      },
+      {
+        name: 'Ordinario nocturno',
+        key: 'ordinarioNocturno',
+        value: output.ordinarioNocturno,
+        legalBase: 'Art. 160 + 168.1 CST',
+        description: 'Trabajo ordinario en horario nocturno (19:00-06:00)',
+      },
+      {
+        name: 'Extra diurno',
+        key: 'extraDiurno',
+        value: output.extraDiurno,
+        legalBase: 'Art. 159 + 168.2 CST',
+        description: 'Hora extra en horario diurno',
+      },
+      {
+        name: 'Extra nocturno',
+        key: 'extraNocturno',
+        value: output.extraNocturno,
+        legalBase: 'Art. 159 + 168.3 CST',
+        description:
+          'Hora extra en horario nocturno (no acumula con recargo nocturno 35%)',
+      },
+      {
+        name: 'Dominical/Festivo diurno',
+        key: 'dominicalFestivoDiurno',
+        value: output.dominicalFestivoDiurno,
+        legalBase: 'Art. 179 + Ley 2466 Art. 14',
+        description: 'Trabajo ordinario en domingo/festivo, horario diurno',
+      },
+      {
+        name: 'Dominical/Festivo nocturno',
+        key: 'dominicalFestivoNocturno',
+        value: output.dominicalFestivoNocturno,
+        legalBase: 'Art. 179 + 168.1 + Ley 2466',
+        description: 'Trabajo ordinario en domingo/festivo, horario nocturno',
+      },
+      {
+        name: 'Extra Dominical/Festivo diurno',
+        key: 'extraDominicalFestivoDiurno',
+        value: output.extraDominicalFestivoDiurno,
+        legalBase: 'Art. 179 + 168.2 + Ley 2466',
+        description: 'Hora extra en domingo/festivo, horario diurno',
+      },
+      {
+        name: 'Extra Dominical/Festivo nocturno',
+        key: 'extraDominicalFestivoNocturno',
+        value: output.extraDominicalFestivoNocturno,
+        legalBase: 'Art. 179 + 168.3 + Ley 2466',
+        description: 'Hora extra en domingo/festivo, horario nocturno',
+      },
     ];
 
     const totalBucketSum = bucketDefs.reduce((sum, b) => sum + b.value, 0);
 
-    const buckets: BucketDetail[] = bucketDefs.map(b => ({
+    const buckets: BucketDetail[] = bucketDefs.map((b) => ({
       name: b.name,
       key: b.key,
       minutes: b.value,
-      percentage: BUCKET_PERCENTAGES[b.key as keyof typeof BUCKET_PERCENTAGES] * 100,
+      percentage:
+        BUCKET_PERCENTAGES[b.key as keyof typeof BUCKET_PERCENTAGES] * 100,
       legalBase: b.legalBase,
       description: b.description,
     }));
@@ -285,17 +402,27 @@ export class AuditEngineService {
     };
   }
 
-  private buildValidations(output: EngineOutput, effectiveMinutes: number, timeline: MinuteClassification[]): Validation[] {
-    const bucketSum = output.ordinarioDiurno + output.ordinarioNocturno +
-      output.extraDiurno + output.extraNocturno +
-      output.dominicalFestivoDiurno + output.dominicalFestivoNocturno +
-      output.extraDominicalFestivoDiurno + output.extraDominicalFestivoNocturno;
+  private buildValidations(
+    output: EngineOutput,
+    effectiveMinutes: number,
+    timeline: MinuteClassification[],
+  ): Validation[] {
+    const bucketSum =
+      output.ordinarioDiurno +
+      output.ordinarioNocturno +
+      output.extraDiurno +
+      output.extraNocturno +
+      output.dominicalFestivoDiurno +
+      output.dominicalFestivoNocturno +
+      output.extraDominicalFestivoDiurno +
+      output.extraDominicalFestivoNocturno;
 
-    const allSameDate = timeline.length > 0 && new Set(timeline.map(t => t.dateStr)).size === 1;
-    const hasNight = timeline.some(t => t.isNight);
-    const hasDay = timeline.some(t => !t.isNight);
-    const hasHoliday = timeline.some(t => t.isHoliday);
-    const hasSunday = timeline.some(t => t.isSunday);
+    const allSameDate =
+      timeline.length > 0 && new Set(timeline.map((t) => t.dateStr)).size === 1;
+    const hasNight = timeline.some((t) => t.isNight);
+    const hasDay = timeline.some((t) => !t.isNight);
+    const hasHoliday = timeline.some((t) => t.isHoliday);
+    const hasSunday = timeline.some((t) => t.isSunday);
 
     return [
       {
@@ -315,7 +442,9 @@ export class AuditEngineService {
       },
       {
         name: 'Descanso descontado correctamente',
-        passed: output.breakMinutes >= 0 && output.breakMinutes <= output.totalMinutes,
+        passed:
+          output.breakMinutes >= 0 &&
+          output.breakMinutes <= output.totalMinutes,
         detail: `breakMinutes=${output.breakMinutes}, totalMinutes=${output.totalMinutes}`,
       },
       {
@@ -326,7 +455,9 @@ export class AuditEngineService {
       {
         name: 'Límites diarios respetados',
         passed: true,
-        detail: allSameDate ? 'Jornada de un solo día — caps se verifican por minuto' : 'Jornada multi-día — caps verificados por día',
+        detail: allSameDate
+          ? 'Jornada de un solo día — caps se verifican por minuto'
+          : 'Jornada multi-día — caps verificados por día',
       },
     ];
   }
@@ -339,7 +470,10 @@ export class AuditEngineService {
     return map;
   }
 
-  private emptyOutput(totalMinutes: number, breakMinutes: number): EngineOutput {
+  private emptyOutput(
+    totalMinutes: number,
+    breakMinutes: number,
+  ): EngineOutput {
     return {
       totalMinutes,
       breakMinutes,
@@ -363,16 +497,35 @@ export class AuditEngineService {
       generalInfo: this.buildGeneralInfo(input, totalMinutes, employeeInfo),
       inputData: this.buildInputData(input, totalMinutes),
       configUsed: this.buildConfigUsed(input),
-      breakApplication: { totalMinutes, breakMinutes: 0, effectiveMinutes: 0, reasoning: 'Tiempo total ≤ 0, no hay minutos a clasificar.' },
+      breakApplication: {
+        totalMinutes,
+        breakMinutes: 0,
+        effectiveMinutes: 0,
+        reasoning: 'Tiempo total ≤ 0, no hay minutos a clasificar.',
+      },
       timeline: [],
       legalClassification: {
         buckets: [],
         totalLiquidable: 0,
-        invariants: { sumOfBuckets: 0, equalsLiquidable: true, noDoubleCounting: true },
+        invariants: {
+          sumOfBuckets: 0,
+          equalsLiquidable: true,
+          noDoubleCounting: true,
+        },
       },
-      weeklyAccumulation: this.buildWeeklyAccumulation(input.accumulatedWeekMinutes, input.accumulatedWeekMinutes, input.weeklyTargetMinutes),
+      weeklyAccumulation: this.buildWeeklyAccumulation(
+        input.accumulatedWeekMinutes,
+        input.accumulatedWeekMinutes,
+        input.weeklyTargetMinutes,
+      ),
       finalResult: this.emptyOutput(0, 0),
-      validations: [{ name: 'Tiempo total inválido', passed: false, detail: `totalMinutes=${totalMinutes} ≤ 0` }],
+      validations: [
+        {
+          name: 'Tiempo total inválido',
+          passed: false,
+          detail: `totalMinutes=${totalMinutes} ≤ 0`,
+        },
+      ],
       generatedAt: new Date().toISOString(),
     };
   }
@@ -393,6 +546,14 @@ export class AuditEngineService {
   }
 
   private dayNameEs(dayOfWeek: number): string {
-    return ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][dayOfWeek];
+    return [
+      'Domingo',
+      'Lunes',
+      'Martes',
+      'Miércoles',
+      'Jueves',
+      'Viernes',
+      'Sábado',
+    ][dayOfWeek];
   }
 }

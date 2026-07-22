@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Body,
+  Query,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { WorkSessionsService } from './work-sessions.service';
@@ -25,7 +34,10 @@ export class WorkSessionsController {
   @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA, Role.SUPERVISOR)
   @Post()
   @ApiOperation({ summary: 'Registrar una jornada laboral' })
-  create(@Body() dto: CreateWorkSessionDto, @CurrentUser('id') userId?: number) {
+  create(
+    @Body() dto: CreateWorkSessionDto,
+    @CurrentUser('id') userId?: number,
+  ) {
     return this.workSessionsService.create(dto, userId);
   }
 
@@ -68,13 +80,18 @@ export class WorkSessionsController {
   @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA)
   @Post(':id/recalcular')
   @ApiOperation({ summary: 'Recalcular clasificación de una jornada' })
-  recalculate(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId?: number) {
+  recalculate(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('id') userId?: number,
+  ) {
     return this.workSessionsService.recalculate(id, userId);
   }
 
   @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA)
   @Patch(':id/compensatorio')
-  @ApiOperation({ summary: 'Registrar decisión compensatoria sobre una jornada' })
+  @ApiOperation({
+    summary: 'Registrar decisión compensatoria sobre una jornada',
+  })
   setCompensatoryDecision(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CompensatoryDecisionDto,
@@ -85,7 +102,10 @@ export class WorkSessionsController {
 
   @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA, Role.SUPERVISOR)
   @Post(':id/auditoria')
-  @ApiOperation({ summary: 'Auditar una jornada — traza paso a paso del motor de clasificación' })
+  @ApiOperation({
+    summary:
+      'Auditar una jornada — traza paso a paso del motor de clasificación',
+  })
   async audit(@Param('id', ParseIntPipe) id: number) {
     const session = await this.prisma.workSession.findUnique({
       where: { id },
@@ -106,14 +126,21 @@ export class WorkSessionsController {
       });
     }
 
-    const holidays = await this.prisma.holiday.findMany({ select: { date: true } });
+    const holidays = await this.prisma.holiday.findMany({
+      select: { date: true },
+    });
     const config = session.employee.workConfig;
-    const ordinaryDistributions = config?.ordinaryDistributions?.map((d) => ({
-      dayOfWeek: d.dayOfWeek,
-      ordinaryMinutesCap: d.ordinaryMinutesCap,
-    })) ?? [];
+    const ordinaryDistributions =
+      config?.ordinaryDistributions?.map((d) => ({
+        dayOfWeek: d.dayOfWeek,
+        ordinaryMinutesCap: d.ordinaryMinutesCap,
+      })) ?? [];
 
-    const accumulatedWeekMinutes = await this.workSessionsService.getAccumulatedWeekMinutes(session.employeeId, session.startTime);
+    const accumulatedWeekMinutes =
+      await this.workSessionsService.getAccumulatedWeekMinutes(
+        session.employeeId,
+        session.startTime,
+      );
 
     return this.auditEngine.trace(
       {
@@ -121,8 +148,11 @@ export class WorkSessionsController {
         endTime: session.endTime,
         ordinaryDistributions,
         holidays: holidays.map((h) => h.date),
-        workModality: session.employee.workModality as 'ADMINISTRATIVO' | 'TERRITORIO',
-        weeklyTargetMinutes: session.employee.weeklyTargetMinutes ?? config?.weeklyTargetMinutes ?? 2520,
+        workModality: session.employee.workModality,
+        weeklyTargetMinutes:
+          session.employee.weeklyTargetMinutes ??
+          config?.weeklyTargetMinutes ??
+          2520,
         accumulatedWeekMinutes,
         breakMinutes: config?.breakMinutes ?? 60,
         breakThresholdMinutes: config?.breakThresholdMinutes ?? null,

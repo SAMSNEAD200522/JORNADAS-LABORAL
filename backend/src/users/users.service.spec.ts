@@ -2,7 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ConflictException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
@@ -63,7 +67,7 @@ describe('UsersService', () => {
     it('debe crear un usuario exitosamente', async () => {
       mockPrisma.user.create.mockResolvedValue(userSelectResult);
 
-      const result = await service.create(dto as any, 1);
+      const result = await service.create(dto, 1);
 
       expect(result).toEqual(userSelectResult);
       expect(bcrypt.hash).toHaveBeenCalledWith('password123', 10);
@@ -94,7 +98,9 @@ describe('UsersService', () => {
       });
       mockPrisma.user.create.mockRejectedValue(prismaError);
 
-      await expect(service.create(dto as any, 1)).rejects.toThrow(ConflictException);
+      await expect(service.create(dto as any, 1)).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('debe re-lanzar errores que no sean P2002', async () => {
@@ -104,7 +110,9 @@ describe('UsersService', () => {
       });
       mockPrisma.user.create.mockRejectedValue(prismaError);
 
-      await expect(service.create(dto as any, 1)).rejects.toThrow('Server error');
+      await expect(service.create(dto as any, 1)).rejects.toThrow(
+        'Server error',
+      );
     });
   });
 
@@ -224,7 +232,7 @@ describe('UsersService', () => {
       });
       mockPrisma.user.update.mockResolvedValue(updated);
 
-      const result = await service.update(1, { name: 'Nombre Actualizado' } as any, 1);
+      const result = await service.update(1, { name: 'Nombre Actualizado' }, 1);
 
       expect(result).toEqual(updated);
       expect(mockAudit.log).toHaveBeenCalledWith(
@@ -239,7 +247,8 @@ describe('UsersService', () => {
     it('debe lanzar ConflictException si el nuevo correo ya está registrado', async () => {
       mockPrisma.user.findUnique.mockImplementation(async (args: any) => {
         if (args.where?.id) return userSelectResult;
-        if (args.where?.email === 'otro@test.com') return { id: 2, email: 'otro@test.com' };
+        if (args.where?.email === 'otro@test.com')
+          return { id: 2, email: 'otro@test.com' };
         return null;
       });
 
@@ -249,10 +258,12 @@ describe('UsersService', () => {
     });
 
     it('debe hashear la contraseña si se proporciona en el DTO', async () => {
-      mockPrisma.user.findUnique.mockImplementation(async () => userSelectResult);
+      mockPrisma.user.findUnique.mockImplementation(
+        async () => userSelectResult,
+      );
       mockPrisma.user.update.mockResolvedValue(userSelectResult);
 
-      await service.update(1, { password: 'nuevaPassword123' } as any, 1);
+      await service.update(1, { password: 'nuevaPassword123' }, 1);
 
       expect(bcrypt.hash).toHaveBeenCalledWith('nuevaPassword123', 10);
       expect(mockPrisma.user.update).toHaveBeenCalledWith(
@@ -277,7 +288,10 @@ describe('UsersService', () => {
     it('debe activar un usuario', async () => {
       const inactiveUser = { ...userSelectResult, isActive: false };
       mockPrisma.user.findUnique.mockResolvedValue(inactiveUser);
-      mockPrisma.user.update.mockResolvedValue({ ...inactiveUser, isActive: true });
+      mockPrisma.user.update.mockResolvedValue({
+        ...inactiveUser,
+        isActive: true,
+      });
 
       const result = await service.updateStatus(1, true, 1);
 
@@ -295,7 +309,10 @@ describe('UsersService', () => {
 
     it('debe desactivar un usuario no-admin', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(userSelectResult);
-      mockPrisma.user.update.mockResolvedValue({ ...userSelectResult, isActive: false });
+      mockPrisma.user.update.mockResolvedValue({
+        ...userSelectResult,
+        isActive: false,
+      });
 
       const result = await service.updateStatus(1, false, 1);
 
@@ -310,14 +327,22 @@ describe('UsersService', () => {
     it('debe lanzar NotFoundException si el usuario no existe', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(service.updateStatus(999, true, 1)).rejects.toThrow(NotFoundException);
+      await expect(service.updateStatus(999, true, 1)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('debe bloquear desactivacion del administrador principal (admin@empresa.com)', async () => {
-      const mainAdmin = { ...userSelectResult, email: 'admin@empresa.com', role: Role.ADMINISTRADOR };
+      const mainAdmin = {
+        ...userSelectResult,
+        email: 'admin@empresa.com',
+        role: Role.ADMINISTRADOR,
+      };
       mockPrisma.user.findUnique.mockResolvedValue(mainAdmin);
 
-      await expect(service.updateStatus(1, false, 1)).rejects.toThrow(ForbiddenException);
+      await expect(service.updateStatus(1, false, 1)).rejects.toThrow(
+        ForbiddenException,
+      );
       await expect(service.updateStatus(1, false, 1)).rejects.toMatchObject({
         response: expect.objectContaining({
           code: 'ADMIN_PRINCIPAL_NO_DESACTIVABLE',
@@ -326,11 +351,17 @@ describe('UsersService', () => {
     });
 
     it('debe bloquear desactivacion si no queda ningun administrador activo', async () => {
-      const admin = { ...userSelectResult, email: 'otro.admin@test.com', role: Role.ADMINISTRADOR };
+      const admin = {
+        ...userSelectResult,
+        email: 'otro.admin@test.com',
+        role: Role.ADMINISTRADOR,
+      };
       mockPrisma.user.findUnique.mockResolvedValue(admin);
       mockPrisma.user.count.mockResolvedValue(1);
 
-      await expect(service.updateStatus(1, false, 1)).rejects.toThrow(ForbiddenException);
+      await expect(service.updateStatus(1, false, 1)).rejects.toThrow(
+        ForbiddenException,
+      );
       await expect(service.updateStatus(1, false, 1)).rejects.toMatchObject({
         response: expect.objectContaining({
           code: 'ADMIN_REQUERIDO',
@@ -339,7 +370,11 @@ describe('UsersService', () => {
     });
 
     it('debe permitir desactivar un administrador si hay otros activos', async () => {
-      const admin = { ...userSelectResult, email: 'otro.admin@test.com', role: Role.ADMINISTRADOR };
+      const admin = {
+        ...userSelectResult,
+        email: 'otro.admin@test.com',
+        role: Role.ADMINISTRADOR,
+      };
       mockPrisma.user.findUnique.mockResolvedValue(admin);
       mockPrisma.user.count.mockResolvedValue(3);
       mockPrisma.user.update.mockResolvedValue({ ...admin, isActive: false });
@@ -350,9 +385,17 @@ describe('UsersService', () => {
     });
 
     it('debe permitir reactivar el administrador principal', async () => {
-      const mainAdmin = { ...userSelectResult, email: 'admin@empresa.com', role: Role.ADMINISTRADOR, isActive: false };
+      const mainAdmin = {
+        ...userSelectResult,
+        email: 'admin@empresa.com',
+        role: Role.ADMINISTRADOR,
+        isActive: false,
+      };
       mockPrisma.user.findUnique.mockResolvedValue(mainAdmin);
-      mockPrisma.user.update.mockResolvedValue({ ...mainAdmin, isActive: true });
+      mockPrisma.user.update.mockResolvedValue({
+        ...mainAdmin,
+        isActive: true,
+      });
 
       const result = await service.updateStatus(1, true, 1);
 
@@ -367,7 +410,9 @@ describe('UsersService', () => {
 
       const result = await service.resetPassword(1, 'nuevaPass123', 1);
 
-      expect(result).toEqual({ message: 'Contraseña actualizada exitosamente' });
+      expect(result).toEqual({
+        message: 'Contraseña actualizada exitosamente',
+      });
       expect(bcrypt.hash).toHaveBeenCalledWith('nuevaPass123', 10);
       expect(mockPrisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -395,9 +440,7 @@ describe('UsersService', () => {
 
   describe('getStats', () => {
     it('debe retornar estadísticas correctamente', async () => {
-      mockPrisma.user.count
-        .mockResolvedValueOnce(10)
-        .mockResolvedValueOnce(7);
+      mockPrisma.user.count.mockResolvedValueOnce(10).mockResolvedValueOnce(7);
       mockPrisma.user.groupBy.mockResolvedValue([
         { role: Role.GESTION_HUMANA, _count: { role: 5 } },
         { role: Role.SUPERVISOR, _count: { role: 3 } },

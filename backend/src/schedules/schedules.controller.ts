@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { SchedulesService } from './schedules.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
@@ -46,7 +55,10 @@ export class SchedulesController {
   @Patch(':id/estado')
   @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA)
   @ApiOperation({ summary: 'Activar o desactivar un horario' })
-  toggleStatus(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId?: number) {
+  toggleStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('id') userId?: number,
+  ) {
     return this.schedulesService.toggleStatus(id, userId);
   }
 
@@ -65,7 +77,9 @@ export class SchedulesController {
 
   @Post(':scheduleId/dias')
   @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA)
-  @ApiOperation({ summary: 'Crear o actualizar configuración de un día del horario' })
+  @ApiOperation({
+    summary: 'Crear o actualizar configuración de un día del horario',
+  })
   createDay(
     @Param('scheduleId', ParseIntPipe) scheduleId: number,
     @Body() dto: CreateScheduleDayDto,

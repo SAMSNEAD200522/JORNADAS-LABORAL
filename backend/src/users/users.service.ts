@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -58,7 +63,13 @@ export class UsersService {
     return user;
   }
 
-  async findAll(query?: { search?: string; isActive?: boolean; role?: string; page?: number; limit?: number }) {
+  async findAll(query?: {
+    search?: string;
+    isActive?: boolean;
+    role?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const { search, isActive, role, page = 1, limit = 10 } = query || {};
 
     const where: any = {};
@@ -150,7 +161,8 @@ export class UsersService {
     if (dto.email) updateData.email = dto.email;
     if (dto.name) updateData.name = dto.name;
     if (dto.role) updateData.role = dto.role;
-    if (dto.password) updateData.passwordHash = await bcrypt.hash(dto.password, 10);
+    if (dto.password)
+      updateData.passwordHash = await bcrypt.hash(dto.password, 10);
 
     const user = await this.prisma.user.update({
       where: { id },
@@ -172,7 +184,12 @@ export class UsersService {
       entity: 'Usuario',
       entityId: id,
       oldValues: { email: old.email, name: old.name, role: old.role },
-      newValues: { email: dto.email || old.email, name: dto.name || old.name, role: dto.role || old.role, passwordChanged: !!dto.password },
+      newValues: {
+        email: dto.email || old.email,
+        name: dto.name || old.name,
+        role: dto.role || old.role,
+        passwordChanged: !!dto.password,
+      },
     });
 
     return user;
@@ -197,7 +214,8 @@ export class UsersService {
       if (isTargetAdmin && activeAdminCount <= 1) {
         throw new ForbiddenException({
           statusCode: 403,
-          message: 'Debe existir al menos un administrador activo en el sistema',
+          message:
+            'Debe existir al menos un administrador activo en el sistema',
           code: 'ADMIN_REQUERIDO',
         });
       }
@@ -265,10 +283,13 @@ export class UsersService {
       total,
       active,
       inactive: total - active,
-      byRole: byRole.reduce((acc, item) => {
-        acc[item.role] = item._count.role;
-        return acc;
-      }, {} as Record<string, number>),
+      byRole: byRole.reduce(
+        (acc, item) => {
+          acc[item.role] = item._count.role;
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
     };
   }
 }

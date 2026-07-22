@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
@@ -83,7 +87,19 @@ export class EmployeesService {
   }
 
   async findAll(query: QueryEmployeeDto) {
-    const { search, documentNumber, firstName, lastName, isActive, area, position, page = 1, limit = 10, sortBy = 'id', sortOrder = 'asc' } = query;
+    const {
+      search,
+      documentNumber,
+      firstName,
+      lastName,
+      isActive,
+      area,
+      position,
+      page = 1,
+      limit = 10,
+      sortBy = 'id',
+      sortOrder = 'asc',
+    } = query;
 
     const where: Prisma.EmployeeWhereInput = {};
 
@@ -191,7 +207,7 @@ export class EmployeesService {
       action: 'ACTUALIZAR',
       entity: 'Empleado',
       entityId: id,
-      oldValues: old as unknown as Record<string, unknown>,
+      oldValues: old,
       newValues: dto as unknown as Record<string, unknown>,
     });
 

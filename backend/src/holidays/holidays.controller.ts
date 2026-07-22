@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Body,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { HolidaysService } from './holidays.service';
 import { CreateHolidayDto } from './dto/create-holiday.dto';
@@ -35,7 +43,10 @@ export class HolidaysController {
   @Delete(':id')
   @Roles(Role.ADMINISTRADOR)
   @ApiOperation({ summary: 'Eliminar un festivo' })
-  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId?: number) {
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('id') userId?: number,
+  ) {
     return this.holidaysService.remove(id, userId);
   }
 }

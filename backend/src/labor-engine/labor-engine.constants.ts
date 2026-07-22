@@ -17,19 +17,19 @@ export const DAY_END_HOUR = 19;
 export const NIGHT_START_HOUR = 19;
 export const NIGHT_END_HOUR = 6;
 
-export const DAY_START = DAY_START_HOUR * 60;   // 360 min
+export const DAY_START = DAY_START_HOUR * 60; // 360 min
 export const NIGHT_START = NIGHT_START_HOUR * 60; // 1140 min
-export const NIGHT_END = NIGHT_END_HOUR * 60;     // 360 min
+export const NIGHT_END = NIGHT_END_HOUR * 60; // 360 min
 
 // ─── Jornada (Art. 161 CST + Ley 2101) ────────────────────────────
 // Desde julio 2026: 42h semanales, 8h diarias máximas
-export const DAILY_MAX_MINUTES = 480;    // 8h × 60
+export const DAILY_MAX_MINUTES = 480; // 8h × 60
 export const WEEKLY_TARGET_MINUTES = 2520; // 42h × 60
 
 // ─── Horas Extra (Art. 159 CST + Art. 162) ────────────────────────
 // Máximo 2h/día, 12h/semana
-export const EXTRA_DAILY_MAX = 120;   // 2h × 60
-export const EXTRA_WEEKLY_MAX = 720;  // 12h × 60
+export const EXTRA_DAILY_MAX = 120; // 2h × 60
+export const EXTRA_WEEKLY_MAX = 720; // 12h × 60
 
 // ─── Descanso (Regla institucional fija) ──────────────────────────
 export const DEFAULT_BREAK_MINUTES = 60;
@@ -46,17 +46,17 @@ export const RECARGO_EXTRA_NOCTURNO = 0.75;
 
 // ─── Recargo dominical/festivo (Art. 179 CST + Ley 2466 Art. 14) ──
 // Antes jul 2025: 75%, Jul 2025-jun 2026: 80%, Jul 2026-jun 2027: 90%, Jul 2027+: 100%
-export const RECARGO_DOMINICAL = 0.90; // Vigente julio 2026
+export const RECARGO_DOMINICAL = 0.9; // Vigente julio 2026
 
 // ─── Porcentajes totales por bucket (% sobre hora ordinaria) ──────
 export const BUCKET_PERCENTAGES = {
-  ordinarioDiurno: 1.00,              // 100%
-  ordinarioNocturno: 1.35,            // 100% + 35%
-  extraDiurno: 1.25,                  // 100% + 25%
-  extraNocturno: 1.75,                // 100% + 75%
-  dominicalFestivoDiurno: 1.90,       // 100% + 90%
-  dominicalFestivoNocturno: 2.25,     // 100% + 90% + 35%
-  extraDominicalFestivoDiurno: 2.15,  // 100% + 90% + 25%
+  ordinarioDiurno: 1.0, // 100%
+  ordinarioNocturno: 1.35, // 100% + 35%
+  extraDiurno: 1.25, // 100% + 25%
+  extraNocturno: 1.75, // 100% + 75%
+  dominicalFestivoDiurno: 1.9, // 100% + 90%
+  dominicalFestivoNocturno: 2.25, // 100% + 90% + 35%
+  extraDominicalFestivoDiurno: 2.15, // 100% + 90% + 25%
   extraDominicalFestivoNocturno: 2.65, // 100% + 90% + 75%
 } as const;
 

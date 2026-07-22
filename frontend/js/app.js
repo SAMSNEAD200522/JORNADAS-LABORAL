@@ -318,7 +318,7 @@ async function renderResumen() {
         <th>Empleado</th><th>Inicio</th><th>Fin</th><th>Total</th>
       </tr></thead><tbody>
         ${recent.data.map(s => `<tr>
-          <td>${s.employee?.firstName || ''} ${s.employee?.lastName || ''}</td>
+          <td>${escapeHtml(s.employee?.firstName || '')} ${escapeHtml(s.employee?.lastName || '')}</td>
           <td>${new Date(s.startTime).toLocaleString('es-CO')}</td>
           <td>${new Date(s.endTime).toLocaleString('es-CO')}</td>
           <td><strong>${formatMinutesToHours(s.totalMinutes)}</strong></td>
@@ -1943,7 +1943,7 @@ async function loadImportHistory(page) {
       <td>${new Date(h.createdAt).toLocaleString('es-CO')}</td>
       <td>${escapeHtml(h.user?.name || '-')}</td>
       <td>${escapeHtml(h.filename)}</td>
-      <td>${MODULE_LABELS[h.module] || h.module}</td>
+      <td>${MODULE_LABELS[h.module] || escapeHtml(h.module)}</td>
       <td>${h.durationMs ? (h.durationMs / 1000).toFixed(1) + 's' : '-'}</td>
       <td>${h.totalRows}</td>
       <td>${h.insertedRows}</td>
@@ -2273,11 +2273,11 @@ function renderAuditContent(trace) {
       Configuraci\u00f3n Utilizada
     </h3>
     <div class="audit-section-body">
-      <div class="audit-kv"><span>Tope diario</span><strong>${JSON.stringify(trace.configUsed.dailyCaps)}</strong></div>
-      <div class="audit-kv"><span>Meta semanal</span><strong>${trace.configUsed.weeklyTargetMinutes} min</strong></div>
-      <div class="audit-kv"><span>Acumulado semanal</span><strong>${trace.configUsed.accumulatedWeekMinutes} min</strong></div>
-      <div class="audit-kv"><span>Horario nocturno</span><strong>${trace.configUsed.nightStart} - ${trace.configUsed.nightEnd}</strong></div>
-      <div class="audit-kv"><span>Recargos</span><strong>${Object.entries(trace.configUsed.recargos).map(([k, v]) => k + ': ' + (v * 100) + '%').join(', ')}</strong></div>
+      <div class="audit-kv"><span>Tope diario</span><strong>${escapeHtml(JSON.stringify(trace.configUsed.dailyCaps))}</strong></div>
+      <div class="audit-kv"><span>Meta semanal</span><strong>${escapeHtml(trace.configUsed.weeklyTargetMinutes + ' min')}</strong></div>
+      <div class="audit-kv"><span>Acumulado semanal</span><strong>${escapeHtml(trace.configUsed.accumulatedWeekMinutes + ' min')}</strong></div>
+      <div class="audit-kv"><span>Horario nocturno</span><strong>${escapeHtml(trace.configUsed.nightStart + ' - ' + trace.configUsed.nightEnd)}</strong></div>
+      <div class="audit-kv"><span>Recargos</span><strong>${escapeHtml(Object.entries(trace.configUsed.recargos).map(([k, v]) => k + ': ' + (v * 100) + '%').join(', '))}</strong></div>
     </div>
   </div>`;
 
@@ -2378,7 +2378,12 @@ function renderAuditContent(trace) {
         <div class="audit-timeline">`;
     for (const t of trace.timeline) {
       const color = BUCKET_COLORS[t.bucket] || '#666';
-      html += `<div class="audit-timeline-cell" style="background:${color}" title="Min ${t.minuteIndex}: ${t.bogotaTime} ${t.dayName} ${t.dateStr}\nBucket: ${t.bucket}\nNight: ${t.isNight ? 'Si' : 'No'} | Ord: ${t.isOrdinary ? 'Si' : 'No'}\nDaily: ${t.dailyUsedBefore}/${t.dailyCap} | Weekly: ${t.weeklyUsedBefore}"></div>`;
+      const title = `Min ${t.minuteIndex}: ${t.bogotaTime} ${t.dayName} ${t.dateStr}\\nBucket: ${t.bucket}\\nNight: ${t.isNight ? 'Si' : 'No'} | Ord: ${t.isOrdinary ? 'Si' : 'No'}\\nDaily: ${t.dailyUsedBefore}/${t.dailyCap} | Weekly: ${t.weeklyUsedBefore}`;
+      const cell = document.createElement('div');
+      cell.className = 'audit-timeline-cell';
+      cell.style.background = color;
+      cell.title = title;
+      html += cell.outerHTML;
     }
     html += `</div>
         <div class="audit-timeline-legend">`;
@@ -2406,6 +2411,7 @@ function toggleAuditSection(titleEl) {
 function exportAuditPDF() {
   const content = document.getElementById('auditContent');
   const printWindow = window.open('', '_blank');
+  const safeContent = content.innerHTML;
   printWindow.document.write(`
     <html><head><title>Auditor\u00eda de Jornada</title>
     <style>
@@ -2427,8 +2433,8 @@ function exportAuditPDF() {
       .audit-legend-color { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
     </style></head><body>
     <h1 style="color:#1A3A6B;font-size:18px">Auditor\u00eda de Jornada Laboral</h1>
-    <p style="color:#666;font-size:11px">Generado: ${new Date().toLocaleString('es-CO')}</p>
-    ${content.innerHTML}
+    <p style="color:#666;font-size:11px">Generado: ${escapeHtml(new Date().toLocaleString('es-CO'))}</p>
+    ${safeContent}
     </body></html>
   `);
   printWindow.document.close();

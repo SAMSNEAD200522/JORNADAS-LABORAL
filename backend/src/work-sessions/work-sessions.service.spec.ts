@@ -106,7 +106,9 @@ describe('WorkSessionsService', () => {
         workConfig: { breakMinutes: 60, ordinaryDistributions: [] },
       });
 
-      await expect(service.create(validDto)).rejects.toThrow(BadRequestException);
+      await expect(service.create(validDto)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('debe rechazar endTime <= startTime', async () => {
@@ -133,7 +135,7 @@ describe('WorkSessionsService', () => {
       mockPrisma.workSession.findMany.mockResolvedValue([{ id: 1 }]);
       mockPrisma.workSession.count.mockResolvedValue(1);
 
-      const result = await service.findAll({ page: 1, limit: 20 } as any);
+      const result = await service.findAll({ page: 1, limit: 20 });
       expect(result.meta.total).toBe(1);
     });
   });
@@ -181,7 +183,7 @@ describe('WorkSessionsService', () => {
       const result = await service.update(1, {
         startTime: '2026-07-08T07:00:00.000Z',
         endTime: '2026-07-08T12:00:00.000Z',
-      } as any);
+      });
       expect(result).toHaveProperty('totalMinutes', 300);
     });
 
@@ -193,7 +195,9 @@ describe('WorkSessionsService', () => {
         compensatoryObservation: null,
       });
 
-      await expect(service.update(1, {} as any)).rejects.toThrow(BadRequestException);
+      await expect(service.update(1, {} as any)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('debe cambiar de empleado y reclasificar con los datos del nuevo', async () => {
@@ -230,10 +234,12 @@ describe('WorkSessionsService', () => {
         ...newClassification,
       });
 
-      const result = await service.update(1, { employeeId: 2 } as any);
+      const result = await service.update(1, { employeeId: 2 });
 
       expect(result).toHaveProperty('employeeId', 2);
-      expect(mockPrisma.employee.findUnique).toHaveBeenNthCalledWith(1, { where: { id: 2 } });
+      expect(mockPrisma.employee.findUnique).toHaveBeenNthCalledWith(1, {
+        where: { id: 2 },
+      });
     });
 
     it('debe rechazar cambio a empleado inexistente', async () => {
@@ -284,7 +290,9 @@ describe('WorkSessionsService', () => {
         totalMinutes: 600,
       });
 
-      const result = await service.update(1, { startTime: '2026-07-08T08:00:00.000Z' } as any);
+      const result = await service.update(1, {
+        startTime: '2026-07-08T08:00:00.000Z',
+      });
 
       expect(result).toHaveProperty('employeeId', 1);
       expect(mockPrisma.employee.findUnique).toHaveBeenCalledTimes(1);
@@ -293,7 +301,12 @@ describe('WorkSessionsService', () => {
 
   describe('void', () => {
     it('debe anular una jornada', async () => {
-      mockPrisma.workSession.findUnique.mockResolvedValue({ id: 1, isVoided: false, compensatoryType: null, compensatoryObservation: null });
+      mockPrisma.workSession.findUnique.mockResolvedValue({
+        id: 1,
+        isVoided: false,
+        compensatoryType: null,
+        compensatoryObservation: null,
+      });
       mockPrisma.workSession.update.mockResolvedValue({
         id: 1,
         isVoided: true,
@@ -332,14 +345,20 @@ describe('WorkSessionsService', () => {
         sundayMinutes: 0,
         holidayMinutes: 0,
       });
-      mockPrisma.workSession.update.mockResolvedValue({ id: 1, totalMinutes: 600 });
+      mockPrisma.workSession.update.mockResolvedValue({
+        id: 1,
+        totalMinutes: 600,
+      });
 
       const result = await service.recalculate(1);
       expect(result).toHaveProperty('totalMinutes', 600);
     });
 
     it('debe rechazar recalcular jornada anulada', async () => {
-      mockPrisma.workSession.findUnique.mockResolvedValue({ id: 1, isVoided: true });
+      mockPrisma.workSession.findUnique.mockResolvedValue({
+        id: 1,
+        isVoided: true,
+      });
 
       await expect(service.recalculate(1)).rejects.toThrow(BadRequestException);
     });

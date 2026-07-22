@@ -49,7 +49,10 @@ describe('AllExceptionsFilter', () => {
   });
 
   it('debe manejar HttpException con response de string', () => {
-    const exception = new HttpException('Mensaje directo', HttpStatus.FORBIDDEN);
+    const exception = new HttpException(
+      'Mensaje directo',
+      HttpStatus.FORBIDDEN,
+    );
     const res = mockResponse();
     const req = mockRequest();
     const host = mockHost(req, res);

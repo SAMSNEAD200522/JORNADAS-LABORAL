@@ -4,3 +4,12 @@ dist/
 *.log
 .DS_Store
 coverage/
+*.db
+*.db-shm
+*.db-wal
+backend/prisma/backups/
+backend/uploads/
+JornadasLaboralDesktop/src-tauri/target/
+JornadasLaboralDesktop/src-tauri/gen/
+JornadasLaboralDesktop/package-lock.json
+JornadasLaboralDesktop/src-tauri/Cargo.lock

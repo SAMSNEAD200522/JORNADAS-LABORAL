@@ -1,5 +1,10 @@
 import { Controller, Post, Body, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiOkResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiOkResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { Public } from './decorators/public.decorator';
@@ -12,7 +17,9 @@ export class AuthController {
   @Public()
   @Post('login')
   @ApiOperation({ summary: 'Iniciar sesión y obtener token JWT' })
-  @ApiOkResponse({ description: 'Login exitoso, retorna access token y refresh token' })
+  @ApiOkResponse({
+    description: 'Login exitoso, retorna access token y refresh token',
+  })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }

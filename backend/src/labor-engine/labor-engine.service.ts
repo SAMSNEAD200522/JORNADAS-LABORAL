@@ -19,7 +19,11 @@
  * Descanso: 60 min fijos, se descuenta DESPUÉS de clasificar.
  */
 import { Injectable } from '@nestjs/common';
-import { EngineInput, EngineOutput, OrdinaryDistributionInfo } from './labor-engine.types';
+import {
+  EngineInput,
+  EngineOutput,
+  OrdinaryDistributionInfo,
+} from './labor-engine.types';
 import {
   NIGHT_START,
   NIGHT_END,
@@ -28,7 +32,6 @@ import {
 
 @Injectable()
 export class LaborEngineService {
-
   classify(input: EngineInput): EngineOutput {
     const {
       startTime,
@@ -50,7 +53,10 @@ export class LaborEngineService {
     }
 
     // FASE 1: Descontar descanso ANTES de clasificar
-    const effectiveBreak = Math.min(breakMinutes ?? DEFAULT_BREAK_MINUTES, totalMinutes);
+    const effectiveBreak = Math.min(
+      breakMinutes ?? DEFAULT_BREAK_MINUTES,
+      totalMinutes,
+    );
     const effectiveMinutes = totalMinutes - effectiveBreak;
 
     if (effectiveMinutes <= 0) {
@@ -147,7 +153,9 @@ export class LaborEngineService {
     }
   }
 
-  private buildCapsMap(distributions: OrdinaryDistributionInfo[]): Record<number, number> {
+  private buildCapsMap(
+    distributions: OrdinaryDistributionInfo[],
+  ): Record<number, number> {
     const map: Record<number, number> = {};
     for (const d of distributions) {
       map[d.dayOfWeek] = d.ordinaryMinutesCap;
@@ -155,7 +163,10 @@ export class LaborEngineService {
     return map;
   }
 
-  private emptyOutput(totalMinutes: number, breakMinutes: number): EngineOutput {
+  private emptyOutput(
+    totalMinutes: number,
+    breakMinutes: number,
+  ): EngineOutput {
     return {
       totalMinutes,
       breakMinutes,

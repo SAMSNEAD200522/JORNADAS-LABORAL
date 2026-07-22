@@ -26,7 +26,13 @@ export class AuditService {
     });
   }
 
-  async findAll(query: { page?: number; limit?: number; entity?: string; entityId?: number; userId?: number }) {
+  async findAll(query: {
+    page?: number;
+    limit?: number;
+    entity?: string;
+    entityId?: number;
+    userId?: number;
+  }) {
     const { page = 1, limit = 20, entity, entityId, userId } = query;
 
     const where: Prisma.AuditLogWhereInput = {};
@@ -42,7 +48,9 @@ export class AuditService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: { user: { select: { id: true, name: true, email: true, role: true } } },
+        include: {
+          user: { select: { id: true, name: true, email: true, role: true } },
+        },
       }),
       this.prisma.auditLog.count({ where }),
     ]);

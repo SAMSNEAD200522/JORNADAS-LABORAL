@@ -1,6 +1,10 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { WeeklyQueryDto, MonthlyQueryDto, RangeQueryDto } from './dto/report-query.dto';
+import {
+  WeeklyQueryDto,
+  MonthlyQueryDto,
+  RangeQueryDto,
+} from './dto/report-query.dto';
 
 @Injectable()
 export class ReportsService {
@@ -9,7 +13,13 @@ export class ReportsService {
   async getWeeklySummary(query: WeeklyQueryDto) {
     const { year, week, area, employeeId } = query;
     const { startDate, endDate } = this.weekRange(year, week);
-    return this.aggregate({ startDate, endDate, area, employeeId, label: `Semana ${week} de ${year}` });
+    return this.aggregate({
+      startDate,
+      endDate,
+      area,
+      employeeId,
+      label: `Semana ${week} de ${year}`,
+    });
   }
 
   async getMonthlySummary(query: MonthlyQueryDto) {
@@ -19,8 +29,9 @@ export class ReportsService {
     return this.aggregate({
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-      area, employeeId,
-      label: `${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][month-1]} ${year}`,
+      area,
+      employeeId,
+      label: `${['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][month - 1]} ${year}`,
     });
   }
 
@@ -36,7 +47,8 @@ export class ReportsService {
     return this.aggregate({
       startDate,
       endDate,
-      area, employeeId,
+      area,
+      employeeId,
       label: `${startDate} a ${endDate}`,
     });
   }
@@ -67,7 +79,13 @@ export class ReportsService {
 
     const employees = await this.prisma.employee.findMany({
       where: { ...employeeWhere, isActive: true },
-      select: { id: true, firstName: true, lastName: true, documentNumber: true, area: true },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        documentNumber: true,
+        area: true,
+      },
       orderBy: { lastName: 'asc' },
     });
 
@@ -139,7 +157,10 @@ export class ReportsService {
     };
   }
 
-  private weekRange(year: number, week: number): { startDate: string; endDate: string } {
+  private weekRange(
+    year: number,
+    week: number,
+  ): { startDate: string; endDate: string } {
     const jan4 = new Date(year, 0, 4);
     const dayOfWeek = jan4.getDay();
     const monday = new Date(jan4);

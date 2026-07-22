@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
@@ -81,14 +86,17 @@ export class SchedulesService {
       }
     }
 
-    const schedule = await this.prisma.schedule.update({ where: { id }, data: dto });
+    const schedule = await this.prisma.schedule.update({
+      where: { id },
+      data: dto,
+    });
 
     this.audit.log({
       userId,
       action: 'ACTUALIZAR',
       entity: 'Horario',
       entityId: id,
-      oldValues: old as unknown as Record<string, unknown>,
+      oldValues: old,
       newValues: dto as unknown as Record<string, unknown>,
     });
 
@@ -115,8 +123,14 @@ export class SchedulesService {
     return updated;
   }
 
-  async assignToEmployee(scheduleId: number, employeeId: number, userId?: number) {
-    const schedule = await this.prisma.schedule.findUnique({ where: { id: scheduleId } });
+  async assignToEmployee(
+    scheduleId: number,
+    employeeId: number,
+    userId?: number,
+  ) {
+    const schedule = await this.prisma.schedule.findUnique({
+      where: { id: scheduleId },
+    });
     if (!schedule) {
       throw new NotFoundException({
         statusCode: 404,
@@ -125,7 +139,9 @@ export class SchedulesService {
       });
     }
 
-    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId } });
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+    });
     if (!employee) {
       throw new NotFoundException({
         statusCode: 404,
@@ -153,8 +169,14 @@ export class SchedulesService {
 
   // ─── ScheduleDay CRUD ───────────────────────────────────────
 
-  async createDay(scheduleId: number, dto: CreateScheduleDayDto, userId?: number) {
-    const schedule = await this.prisma.schedule.findUnique({ where: { id: scheduleId } });
+  async createDay(
+    scheduleId: number,
+    dto: CreateScheduleDayDto,
+    userId?: number,
+  ) {
+    const schedule = await this.prisma.schedule.findUnique({
+      where: { id: scheduleId },
+    });
     if (!schedule) {
       throw new NotFoundException({
         statusCode: 404,

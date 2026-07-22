@@ -56,9 +56,13 @@ describe('EmployeesService', () => {
     it('debe crear un empleado exitosamente', async () => {
       mockPrisma.schedule.findUnique.mockResolvedValue(null);
       mockPrisma.workConfig.findUnique.mockResolvedValue(null);
-      mockPrisma.employee.create.mockResolvedValue({ id: 1, ...dto, isActive: true });
+      mockPrisma.employee.create.mockResolvedValue({
+        id: 1,
+        ...dto,
+        isActive: true,
+      });
 
-      const result = await service.create(dto as any);
+      const result = await service.create(dto);
 
       expect(result).toHaveProperty('id', 1);
       expect(mockPrisma.employee.create).toHaveBeenCalledWith(
@@ -69,10 +73,15 @@ describe('EmployeesService', () => {
     });
 
     it('debe rechazar documento duplicado', async () => {
-      const prismaError = Object.assign(new Error('Unique constraint'), { code: 'P2002', clientVersion: '6.0' });
+      const prismaError = Object.assign(new Error('Unique constraint'), {
+        code: 'P2002',
+        clientVersion: '6.0',
+      });
       mockPrisma.employee.create.mockRejectedValue(prismaError);
 
-      await expect(service.create(dto as any)).rejects.toThrow(ConflictException);
+      await expect(service.create(dto as any)).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('debe rechazar horario inexistente', async () => {
@@ -89,7 +98,7 @@ describe('EmployeesService', () => {
       mockPrisma.employee.findMany.mockResolvedValue([{ id: 1 }]);
       mockPrisma.employee.count.mockResolvedValue(1);
 
-      const result = await service.findAll({ page: 1, limit: 10 } as any);
+      const result = await service.findAll({ page: 1, limit: 10 });
 
       expect(result).toHaveProperty('data');
       expect(result).toHaveProperty('meta');
@@ -97,10 +106,16 @@ describe('EmployeesService', () => {
     });
 
     it('debe buscar empleados por search (nombre/apellido/documento)', async () => {
-      mockPrisma.employee.findMany.mockResolvedValue([{ id: 1, firstName: 'Carlos' }]);
+      mockPrisma.employee.findMany.mockResolvedValue([
+        { id: 1, firstName: 'Carlos' },
+      ]);
       mockPrisma.employee.count.mockResolvedValue(1);
 
-      const result = await service.findAll({ search: 'Carlos', page: 1, limit: 10 } as any);
+      const result = await service.findAll({
+        search: 'Carlos',
+        page: 1,
+        limit: 10,
+      });
 
       expect(mockPrisma.employee.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -115,10 +130,12 @@ describe('EmployeesService', () => {
     });
 
     it('debe filtrar por isActive=true', async () => {
-      mockPrisma.employee.findMany.mockResolvedValue([{ id: 1, isActive: true }]);
+      mockPrisma.employee.findMany.mockResolvedValue([
+        { id: 1, isActive: true },
+      ]);
       mockPrisma.employee.count.mockResolvedValue(1);
 
-      await service.findAll({ isActive: true, page: 1, limit: 10 } as any);
+      await service.findAll({ isActive: true, page: 1, limit: 10 });
 
       expect(mockPrisma.employee.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -130,7 +147,10 @@ describe('EmployeesService', () => {
 
   describe('findOne', () => {
     it('debe retornar empleado por id', async () => {
-      mockPrisma.employee.findUnique.mockResolvedValue({ id: 1, firstName: 'Carlos' });
+      mockPrisma.employee.findUnique.mockResolvedValue({
+        id: 1,
+        firstName: 'Carlos',
+      });
 
       const result = await service.findOne(1);
       expect(result).toHaveProperty('id', 1);
@@ -146,9 +166,14 @@ describe('EmployeesService', () => {
   describe('update', () => {
     it('debe actualizar un empleado existente', async () => {
       mockPrisma.employee.findUnique.mockResolvedValue({ id: 1 });
-      mockPrisma.employee.update.mockResolvedValue({ id: 1, position: 'Nuevo Cargo' });
+      mockPrisma.employee.update.mockResolvedValue({
+        id: 1,
+        position: 'Nuevo Cargo',
+      });
 
-      const result = await service.update(1, { position: 'Nuevo Cargo' } as any);
+      const result = await service.update(1, {
+        position: 'Nuevo Cargo',
+      });
       expect(result).toHaveProperty('position', 'Nuevo Cargo');
     });
   });
@@ -173,7 +198,9 @@ describe('EmployeesService', () => {
     it('debe lanzar 404 si el empleado no existe', async () => {
       mockPrisma.employee.findUnique.mockResolvedValue(null);
 
-      await expect(service.updateStatus(999, false)).rejects.toThrow(NotFoundException);
+      await expect(service.updateStatus(999, false)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

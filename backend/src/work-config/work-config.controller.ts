@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { WorkConfigService } from './work-config.service';
 import { CreateWorkConfigDto } from './dto/create-work-config.dto';
@@ -37,14 +46,21 @@ export class WorkConfigController {
   @Patch(':id')
   @Roles(Role.ADMINISTRADOR)
   @ApiOperation({ summary: 'Actualizar configuración laboral' })
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateWorkConfigDto, @CurrentUser('id') userId?: number) {
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateWorkConfigDto,
+    @CurrentUser('id') userId?: number,
+  ) {
     return this.service.update(id, dto, userId);
   }
 
   @Patch(':id/estado')
   @Roles(Role.ADMINISTRADOR)
   @ApiOperation({ summary: 'Activar o desactivar configuración' })
-  toggleStatus(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId?: number) {
+  toggleStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('id') userId?: number,
+  ) {
     return this.service.toggleStatus(id, userId);
   }
 
@@ -63,7 +79,9 @@ export class WorkConfigController {
 
   @Post(':configId/distribucion')
   @Roles(Role.ADMINISTRADOR)
-  @ApiOperation({ summary: 'Crear o actualizar distribución ordinaria para un día' })
+  @ApiOperation({
+    summary: 'Crear o actualizar distribución ordinaria para un día',
+  })
   upsertDistribution(
     @Param('configId', ParseIntPipe) configId: number,
     @Body() dto: CreateOrdinaryDistributionDto,

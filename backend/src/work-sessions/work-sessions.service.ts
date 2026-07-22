@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { LaborEngineService } from '../labor-engine/labor-engine.service';
@@ -78,23 +84,30 @@ export class WorkSessionsService {
       });
     }
 
-    const holidays = await this.prisma.holiday.findMany({ select: { date: true } });
+    const holidays = await this.prisma.holiday.findMany({
+      select: { date: true },
+    });
 
     const config = employee.workConfig;
-    const ordinaryDistributions = config?.ordinaryDistributions?.map((d) => ({
-      dayOfWeek: d.dayOfWeek,
-      ordinaryMinutesCap: d.ordinaryMinutesCap,
-    })) ?? [];
+    const ordinaryDistributions =
+      config?.ordinaryDistributions?.map((d) => ({
+        dayOfWeek: d.dayOfWeek,
+        ordinaryMinutesCap: d.ordinaryMinutesCap,
+      })) ?? [];
 
-    const accumulatedWeekMinutes = await this.getAccumulatedWeekMinutes(employeeId, start);
+    const accumulatedWeekMinutes = await this.getAccumulatedWeekMinutes(
+      employeeId,
+      start,
+    );
 
     const classification = this.engine.classify({
       startTime: start,
       endTime: end,
       ordinaryDistributions,
       holidays: holidays.map((h) => h.date),
-      workModality: employee.workModality as 'ADMINISTRATIVO' | 'TERRITORIO',
-      weeklyTargetMinutes: employee.weeklyTargetMinutes ?? config?.weeklyTargetMinutes ?? 2520,
+      workModality: employee.workModality,
+      weeklyTargetMinutes:
+        employee.weeklyTargetMinutes ?? config?.weeklyTargetMinutes ?? 2520,
       accumulatedWeekMinutes,
       breakMinutes: config?.breakMinutes ?? 60,
       breakThresholdMinutes: config?.breakThresholdMinutes ?? null,
@@ -125,13 +138,25 @@ export class WorkSessionsService {
   }
 
   async findAll(query: QueryWorkSessionDto) {
-    const { employeeId, startDate, endDate, onlyActive, page = 1, limit = 20 } = query;
+    const {
+      employeeId,
+      startDate,
+      endDate,
+      onlyActive,
+      page = 1,
+      limit = 20,
+    } = query;
 
     const where: Prisma.WorkSessionWhereInput = {};
 
     if (employeeId) where.employeeId = employeeId;
-    if (startDate) where.startTime = { ...(where.startTime as any), gte: new Date(startDate) };
-    if (endDate) where.endTime = { ...(where.endTime as any), lte: new Date(endDate) };
+    if (startDate)
+      where.startTime = {
+        ...(where.startTime as any),
+        gte: new Date(startDate),
+      };
+    if (endDate)
+      where.endTime = { ...(where.endTime as any), lte: new Date(endDate) };
     if (onlyActive !== 'false') where.isVoided = false;
 
     const skip = (page - 1) * limit;
@@ -142,7 +167,16 @@ export class WorkSessionsService {
         skip,
         take: limit,
         orderBy: { startTime: 'desc' },
-        include: { employee: { select: { id: true, firstName: true, lastName: true, documentNumber: true } } },
+        include: {
+          employee: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              documentNumber: true,
+            },
+          },
+        },
       }),
       this.prisma.workSession.count({ where }),
     ]);
@@ -182,7 +216,9 @@ export class WorkSessionsService {
     }
 
     const employeeId = dto.employeeId ?? session.employeeId;
-    const startTime = dto.startTime ? new Date(dto.startTime) : session.startTime;
+    const startTime = dto.startTime
+      ? new Date(dto.startTime)
+      : session.startTime;
     const endTime = dto.endTime ? new Date(dto.endTime) : session.endTime;
 
     if (endTime <= startTime) {
@@ -221,23 +257,30 @@ export class WorkSessionsService {
       });
     }
 
-    const holidays = await this.prisma.holiday.findMany({ select: { date: true } });
+    const holidays = await this.prisma.holiday.findMany({
+      select: { date: true },
+    });
 
     const config = employee.workConfig;
-    const ordinaryDistributions = config?.ordinaryDistributions?.map((d) => ({
-      dayOfWeek: d.dayOfWeek,
-      ordinaryMinutesCap: d.ordinaryMinutesCap,
-    })) ?? [];
+    const ordinaryDistributions =
+      config?.ordinaryDistributions?.map((d) => ({
+        dayOfWeek: d.dayOfWeek,
+        ordinaryMinutesCap: d.ordinaryMinutesCap,
+      })) ?? [];
 
-    const accumulatedWeekMinutes = await this.getAccumulatedWeekMinutes(employee.id, startTime);
+    const accumulatedWeekMinutes = await this.getAccumulatedWeekMinutes(
+      employee.id,
+      startTime,
+    );
 
     const classification = this.engine.classify({
       startTime,
       endTime,
       ordinaryDistributions,
       holidays: holidays.map((h) => h.date),
-      workModality: (employee?.workModality ?? 'ADMINISTRATIVO') as 'ADMINISTRATIVO' | 'TERRITORIO',
-      weeklyTargetMinutes: employee?.weeklyTargetMinutes ?? config?.weeklyTargetMinutes ?? 2520,
+      workModality: employee?.workModality ?? 'ADMINISTRATIVO',
+      weeklyTargetMinutes:
+        employee?.weeklyTargetMinutes ?? config?.weeklyTargetMinutes ?? 2520,
       accumulatedWeekMinutes,
       breakMinutes: config?.breakMinutes ?? 60,
       breakThresholdMinutes: config?.breakThresholdMinutes ?? null,
@@ -251,7 +294,9 @@ export class WorkSessionsService {
         employeeId,
         ...(dto.startTime ? { startTime } : {}),
         ...(dto.endTime ? { endTime } : {}),
-        ...(dto.restDayWorked !== undefined ? { restDayWorked: dto.restDayWorked } : {}),
+        ...(dto.restDayWorked !== undefined
+          ? { restDayWorked: dto.restDayWorked }
+          : {}),
         ...prismaData,
       },
       include: { employee: true },
@@ -262,7 +307,11 @@ export class WorkSessionsService {
       action: 'ACTUALIZAR',
       entity: 'Jornada',
       entityId: id,
-      oldValues: { employeeId: session.employeeId, startTime: session.startTime, endTime: session.endTime },
+      oldValues: {
+        employeeId: session.employeeId,
+        startTime: session.startTime,
+        endTime: session.endTime,
+      },
       newValues: { employeeId, startTime, endTime },
     });
 
@@ -301,11 +350,16 @@ export class WorkSessionsService {
     return voided;
   }
 
-  async setCompensatoryDecision(id: number, dto: CompensatoryDecisionDto, userId?: number) {
+  async setCompensatoryDecision(
+    id: number,
+    dto: CompensatoryDecisionDto,
+    userId?: number,
+  ) {
     if (!userId) {
       throw new ForbiddenException({
         statusCode: 403,
-        message: 'Se requiere usuario autenticado para registrar decisión compensatoria',
+        message:
+          'Se requiere usuario autenticado para registrar decisión compensatoria',
         code: 'USUARIO_REQUERIDO',
       });
     }
@@ -376,23 +430,30 @@ export class WorkSessionsService {
       });
     }
 
-    const holidays = await this.prisma.holiday.findMany({ select: { date: true } });
+    const holidays = await this.prisma.holiday.findMany({
+      select: { date: true },
+    });
 
     const config = employee.workConfig;
-    const ordinaryDistributions = config?.ordinaryDistributions?.map((d) => ({
-      dayOfWeek: d.dayOfWeek,
-      ordinaryMinutesCap: d.ordinaryMinutesCap,
-    })) ?? [];
+    const ordinaryDistributions =
+      config?.ordinaryDistributions?.map((d) => ({
+        dayOfWeek: d.dayOfWeek,
+        ordinaryMinutesCap: d.ordinaryMinutesCap,
+      })) ?? [];
 
-    const accumulatedWeekMinutes = await this.getAccumulatedWeekMinutes(employee.id, session.startTime);
+    const accumulatedWeekMinutes = await this.getAccumulatedWeekMinutes(
+      employee.id,
+      session.startTime,
+    );
 
     const classification = this.engine.classify({
       startTime: session.startTime,
       endTime: session.endTime,
       ordinaryDistributions,
       holidays: holidays.map((h) => h.date),
-      workModality: (employee?.workModality ?? 'ADMINISTRATIVO') as 'ADMINISTRATIVO' | 'TERRITORIO',
-      weeklyTargetMinutes: employee?.weeklyTargetMinutes ?? config?.weeklyTargetMinutes ?? 2520,
+      workModality: employee?.workModality ?? 'ADMINISTRATIVO',
+      weeklyTargetMinutes:
+        employee?.weeklyTargetMinutes ?? config?.weeklyTargetMinutes ?? 2520,
       accumulatedWeekMinutes,
       breakMinutes: config?.breakMinutes ?? 60,
       breakThresholdMinutes: config?.breakThresholdMinutes ?? null,
@@ -418,16 +479,23 @@ export class WorkSessionsService {
     return recalculated;
   }
 
-  async getAccumulatedWeekMinutes(employeeId: number, referenceDate: Date): Promise<number> {
+  async getAccumulatedWeekMinutes(
+    employeeId: number,
+    referenceDate: Date,
+  ): Promise<number> {
     const BOGOTA_OFFSET = 300;
     const localOffset = referenceDate.getTimezoneOffset();
-    const bogota = new Date(referenceDate.getTime() + (localOffset - BOGOTA_OFFSET) * 60000);
+    const bogota = new Date(
+      referenceDate.getTime() + (localOffset - BOGOTA_OFFSET) * 60000,
+    );
 
     const dayOfWeek = bogota.getDay();
     const monday = new Date(bogota);
     monday.setDate(bogota.getDate() - ((dayOfWeek + 6) % 7));
     monday.setHours(0, 0, 0, 0);
-    const bogotaMonday = new Date(monday.getTime() - (localOffset - BOGOTA_OFFSET) * 60000);
+    const bogotaMonday = new Date(
+      monday.getTime() - (localOffset - BOGOTA_OFFSET) * 60000,
+    );
 
     const result = await this.prisma.workSession.aggregate({
       where: {
@@ -451,7 +519,8 @@ export class WorkSessionsService {
 
     let overlapMinutes = 0;
     for (const session of overlappingSessions) {
-      const overlapEnd = session.endTime < referenceDate ? session.endTime : referenceDate;
+      const overlapEnd =
+        session.endTime < referenceDate ? session.endTime : referenceDate;
       const overlapMs = overlapEnd.getTime() - bogotaMonday.getTime();
       overlapMinutes += Math.max(0, Math.round(overlapMs / 60000));
     }

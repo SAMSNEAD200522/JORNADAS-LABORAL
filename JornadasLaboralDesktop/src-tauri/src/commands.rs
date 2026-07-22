@@ -42,14 +42,24 @@ pub fn open_in_explorer(path: String) -> Result<(), String> {
         return Err(format!("Path does not exist: {}", path));
     }
 
-    Command::new("explorer")
-        .arg(if p.is_file() {
-            format!("/select,{}", path)
-        } else {
-            path
-        })
-        .spawn()
-        .map_err(|e| format!("Failed to open explorer: {}", e))?;
+    let canonical = p.canonicalize().map_err(|e| format!("Cannot resolve path: {}", e))?;
+    let path_str = canonical.to_string_lossy().to_string();
+
+    if path_str.contains("..") {
+        return Err("Path traversal not allowed".to_string());
+    }
+
+    if p.is_file() {
+        Command::new("explorer")
+            .arg(format!("/select,{}", path_str))
+            .spawn()
+            .map_err(|e| format!("Failed to open explorer: {}", e))?;
+    } else {
+        Command::new("explorer")
+            .arg(&path_str)
+            .spawn()
+            .map_err(|e| format!("Failed to open explorer: {}", e))?;
+    }
 
     Ok(())
 }

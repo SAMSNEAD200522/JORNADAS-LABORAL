@@ -1,9 +1,20 @@
-import { IsEnum, IsOptional, IsString, IsInt, MaxLength, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsInt,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CompensatoryType } from '@prisma/client';
 
 export class CompensatoryDecisionDto {
-  @ApiProperty({ enum: CompensatoryType, description: 'Tipo de compensatorio', example: 'PENDIENTE_DEFINICION' })
+  @ApiProperty({
+    enum: CompensatoryType,
+    description: 'Tipo de compensatorio',
+    example: 'PENDIENTE_DEFINICION',
+  })
   @IsEnum(CompensatoryType)
   compensatoryType: CompensatoryType;
 
@@ -13,7 +24,10 @@ export class CompensatoryDecisionDto {
   @Min(0)
   compensatoryHours?: number;
 
-  @ApiPropertyOptional({ description: 'Observación', example: 'Se compensa con día de descanso el próximo sábado' })
+  @ApiPropertyOptional({
+    description: 'Observación',
+    example: 'Se compensa con día de descanso el próximo sábado',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(500)

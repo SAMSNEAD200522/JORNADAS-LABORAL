@@ -3,7 +3,10 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class QueryAuditDto {
-  @ApiPropertyOptional({ description: 'Filtrar por entidad (ej: Empleado, Horario, Jornada, Festivo)' })
+  @ApiPropertyOptional({
+    description:
+      'Filtrar por entidad (ej: Empleado, Horario, Jornada, Festivo)',
+  })
   @IsOptional()
   @IsString()
   entity?: string;
