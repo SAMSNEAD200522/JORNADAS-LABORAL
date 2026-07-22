@@ -100,16 +100,14 @@ pub async fn open_file_dialog(app: AppHandle, filters: Option<Vec<FileFilter>>) 
 
         if let Some(filters) = filters {
             for f in &filters {
-                let mut dialog_filter = tauri_plugin_dialog::FileDialogBuilder::new(&mut builder);
                 let exts: Vec<&str> = f.extensions.iter().map(|s| s.as_str()).collect();
-                dialog_filter = dialog_filter.add_filter(&f.name, &exts);
-                builder = dialog_filter;
+                builder = builder.add_filter(&f.name, &exts);
             }
         }
 
         builder
             .blocking_pick_file()
-            .map(|p| p.to_string_lossy().to_string())
+            .map(|p| p.to_string())
     };
 
     Ok(result)
@@ -126,16 +124,14 @@ pub async fn save_file_dialog(app: AppHandle, default_name: Option<String>, filt
 
         if let Some(filters) = filters {
             for f in &filters {
-                let mut dialog_filter = tauri_plugin_dialog::FileDialogBuilder::new(&mut builder);
                 let exts: Vec<&str> = f.extensions.iter().map(|s| s.as_str()).collect();
-                dialog_filter = dialog_filter.add_filter(&f.name, &exts);
-                builder = dialog_filter;
+                builder = builder.add_filter(&f.name, &exts);
             }
         }
 
         builder
             .blocking_save_file()
-            .map(|p| p.to_string_lossy().to_string())
+            .map(|p| p.to_string())
     };
 
     Ok(result)
@@ -147,7 +143,7 @@ pub async fn open_directory_dialog(app: AppHandle) -> Result<Option<String>, Str
         .dialog()
         .file()
         .blocking_pick_folder()
-        .map(|p| p.to_string_lossy().to_string());
+        .map(|p| p.to_string());
 
     Ok(result)
 }

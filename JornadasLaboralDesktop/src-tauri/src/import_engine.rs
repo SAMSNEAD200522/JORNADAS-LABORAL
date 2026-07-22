@@ -52,7 +52,7 @@ pub struct ImportResult {
     pub error_report_path: Option<String>,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ImportHistoryEntry {
     pub id: i32,
     pub date: String,
@@ -195,7 +195,7 @@ pub async fn import_file(
 
     let backup_result = backup::copy_database(&config.db_path, &config.backup_dir)?;
 
-    let preview = preview_import(config, file_path.clone(), import_config.module.clone()).await?;
+    let preview = preview_import(config.clone(), file_path.clone(), import_config.module.clone()).await?;
 
     if preview.error_rows > 0 && !import_config.dry_run {
         let error_report_path = generate_error_report(&config, &filename, &preview)?;
@@ -353,23 +353,32 @@ pub async fn rollback_import(
 }
 
 fn read_excel_file(path: &PathBuf) -> Result<Vec<std::collections::HashMap<String, String>>, String> {
-    let data = fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?;
+    use calamine::{open_workbook_auto_from_rs, Reader, Data};
+    use std::io::Cursor;
 
-    let mut workbook = xls_read::Reader::new(&data)
+    let data = fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?;
+    let cursor = Cursor::new(data);
+
+    let mut workbook = open_workbook_auto_from_rs(cursor)
         .map_err(|e| format!("Failed to parse Excel file: {}", e))?;
 
     let mut rows = Vec::new();
     let mut headers: Vec<String> = Vec::new();
 
-    for (idx, sheet) in workbook.sheet_names().iter().enumerate() {
-        if idx > 0 {
-            break;
-        }
-
-        if let Ok(sheet_data) = workbook.worksheet_range(sheet) {
-            for (row_idx, row) in sheet_data.rows().enumerate() {
+    let sheet_names = workbook.sheet_names().to_vec();
+    if let Some(sheet) = sheet_names.first() {
+        if let Ok(range) = workbook.worksheet_range(sheet) {
+            for (row_idx, row) in range.rows().enumerate() {
                 if row_idx == 0 {
-                    headers = row.iter().map(|c| format!("{:?}", c)).collect();
+                    headers = row.iter().map(|c| {
+                        match c {
+                            Data::String(s) => s.clone(),
+                            Data::Float(f) => f.to_string(),
+                            Data::Int(i) => i.to_string(),
+                            Data::Bool(b) => b.to_string(),
+                            _ => format!("Col_{}", row_idx),
+                        }
+                    }).collect();
                     continue;
                 }
 
@@ -377,10 +386,11 @@ fn read_excel_file(path: &PathBuf) -> Result<Vec<std::collections::HashMap<Strin
                 for (col_idx, cell) in row.iter().enumerate() {
                     if col_idx < headers.len() {
                         let value = match cell {
-                            xls_read::DataType::String(s) => s.clone(),
-                            xls_read::DataType::Float(f) => f.to_string(),
-                            xls_read::DataType::Int(i) => i.to_string(),
-                            xls_read::DataType::Bool(b) => b.to_string(),
+                            Data::String(s) => s.clone(),
+                            Data::Float(f) => f.to_string(),
+                            Data::Int(i) => i.to_string(),
+                            Data::Bool(b) => b.to_string(),
+                            Data::Empty => String::new(),
                             _ => String::new(),
                         };
                         map.insert(headers[col_idx].clone(), value);
