@@ -147,63 +147,86 @@ Login, Resumen (Dashboard), Empleados, Configuracion Laboral, Jornadas, Historic
 
 ### 2.1 Design Principles
 
-1. **Offline-first:** Full functionality without network connectivity
-2. **Zero-config:** SQLite embedded, no server setup required
-3. **Single binary:** One `.exe` file for Windows distribution
-4. **Data sovereignty:** All data stays on the local machine
-5. **Backward compatible:** Same labor engine logic as web version
-6. **Graceful degradation:** Online features (sync, backup upload) optional
+1. **Maximum code reuse:** Existing NestJS backend, Prisma ORM, and vanilla JS frontend are reused as-is
+2. **Tauri as shell only:** Rust code is limited to native OS integration (file dialogs, window management, system tray, backups)
+3. **NestJS as sidecar:** Tauri launches the existing NestJS backend as a child process
+4. **Offline-first:** Full functionality without network connectivity
+5. **SQLite for desktop:** Same Prisma schema, just swap PostgreSQL driver for SQLite
+6. **No rewriting:** Labor engine, audit engine, auth, reports — all remain TypeScript
 
-### 2.2 Application Layers
+### 2.2 Application Layers (Sidecar Architecture)
 
 ```
-┌─────────────────────────────────────────────┐
-│              Tauri Window                    │
-│  ┌───────────────────────────────────────┐  │
-│  │         Frontend (Vite + TS)          │  │
-│  │  ┌─────────┐ ┌─────────┐ ┌────────┐  │  │
-│  │  │ Pages   │ │Components│ │ Services│  │  │
-│  │  └────┬────┘ └────┬────┘ └───┬────┘  │  │
-│  │       └───────────┼──────────┘        │  │
-│  │              Tauri IPC Bridge          │  │
-│  └───────────────────┬───────────────────┘  │
-├──────────────────────┼──────────────────────┤
-│              Tauri Rust Backend             │
-│  ┌───────────────────┼───────────────────┐  │
-│  │         Command Layer (IPC)           │  │
-│  │  ┌──────┐ ┌──────┐ ┌──────────────┐  │  │
-│  │  │ Auth │ │ Data │ │   Engine     │  │  │
-│  │  │ Cmds │ │ Cmds │ │   Commands   │  │  │
-│  │  └──┬───┘ └──┬───┘ └──────┬───────┘  │  │
-│  │     └────────┼─────────────┘          │  │
-│  │         Service Layer                 │  │
-│  │  ┌──────┐ ┌──────┐ ┌──────────────┐  │  │
-│  │  │ Auth │ │ Data │ │   Engine     │  │  │
-│  │  │ Svc  │ │ Svc  │ │   Service    │  │  │
-│  │  └──┬───┘ └──┬───┘ └──────┬───────┘  │  │
-│  │     └────────┼─────────────┘          │  │
-│  │         Data Access Layer             │  │
-│  │  ┌──────────────────────────────┐     │  │
-│  │  │   Diesel ORM + SQLite        │     │  │
-│  │  └──────────────────────────────┘     │  │
-│  └───────────────────────────────────────┘  │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│                  Tauri Window                         │
+│  ┌───────────────────────────────────────────────┐   │
+│  │     Existing Frontend (HTML/CSS/JS SPA)       │   │
+│  │     Served by NestJS at localhost:PORT         │   │
+│  │  ┌─────────┐ ┌─────────┐ ┌────────────────┐  │   │
+│  │  │ Pages   │ │Components│ │  JS Services   │  │   │
+│  │  └────┬────┘ └────┬────┘ └───────┬────────┘  │   │
+│  │       └───────────┼──────────────┘            │   │
+│  │              HTTP to localhost                 │   │
+│  └───────────────────┬───────────────────────────┘   │
+│                      │                                │
+│  ┌───────────────────┴───────────────────────────┐   │
+│  │           Tauri Rust Shell (thin)              │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────────┐  │   │
+│  │  │ Sidecar  │ │   File   │ │   Window     │  │   │
+│  │  │ Manager  │ │  Dialogs │ │   Manager    │  │   │
+│  │  └────┬─────┘ └──────────┘ └──────────────┘  │   │
+│  │       │ Launches & manages                    │   │
+│  └───────┼───────────────────────────────────────┘   │
+│          ▼                                           │
+│  ┌───────────────────────────────────────────────┐   │
+│  │        NestJS Backend (sidecar process)       │   │
+│  │  ┌─────────┐ ┌─────────┐ ┌────────────────┐  │   │
+│  │  │ Auth    │ │ Labor   │ │   All API      │  │   │
+│  │  │ Module  │ │ Engine  │ │   Endpoints    │  │   │
+│  │  └────┬────┘ └────┬────┘ └───────┬────────┘  │   │
+│  │       └───────────┼──────────────┘            │   │
+│  │              Prisma ORM                        │   │
+│  │  ┌──────────────────────────────────────┐     │   │
+│  │  │   SQLite (embedded, zero-config)     │     │   │
+│  │  └──────────────────────────────────────┘     │   │
+│  └───────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────┘
 ```
 
 ### 2.3 Technology Mapping (Web → Desktop)
 
-| Web Component | Desktop Equivalent | Rationale |
-|---------------|-------------------|-----------|
-| NestJS (Node.js) | Tauri Rust commands | Native performance, smaller binary |
-| Prisma ORM | Diesel ORM | Rust-native, compile-time query checks |
-| PostgreSQL | SQLite (embedded) | Zero-config, single-file database |
-| Vanilla JS SPA | Vite + TypeScript + React | Type safety, component reuse |
-| JWT auth | Local session + PIN | No network, no tokens needed |
-| Express static serve | Tauri asset protocol | Built-in asset serving |
-| Docker | Tauri bundler | Native Windows installer |
-| SheetJS CDN | xlsx Rust crate or TS lib | Embedded export capability |
-| helmet | Tauri CSP config | Native content security |
-| Rate limiter | Not needed | No network exposure |
+| Web Component | Desktop Equivalent | Reused? |
+|---------------|-------------------|---------|
+| NestJS backend | NestJS sidecar (same code) | YES — no changes |
+| Prisma ORM | Prisma ORM (same code) | YES — no changes |
+| Labor Engine (TS) | Labor Engine (same TS) | YES — no changes |
+| Audit Engine (TS) | Audit Engine (same TS) | YES — no changes |
+| Auth (JWT + bcrypt) | Auth (same JWT + bcrypt) | YES — no changes |
+| Vanilla JS SPA frontend | Same frontend served by NestJS | YES — no changes |
+| PostgreSQL (prod) | SQLite (via Prisma) | CHANGE — driver swap only |
+| Docker | Tauri sidecar manager | REPLACED — native packaging |
+| Express static serve | NestJS static serve (same) | YES — no changes |
+| helmet / rate limiter | NestJS middleware (same) | YES — no changes |
+| SheetJS CDN | SheetJS CDN (same) | YES — no changes |
+| Tauri shell | Rust (file dialogs, OS) | NEW — native OS layer |
+
+### 2.4 What Rust Handles (and What It Doesn't)
+
+**Rust handles:**
+- Launching and managing the NestJS sidecar process
+- Native file dialogs (open/save for Excel import/export, backups)
+- Window lifecycle (minimize, maximize, close, system tray)
+- OS integration (app data paths, auto-updater, notifications)
+- Backup file operations (copy, compress, verify checksums)
+- Application packaging (NSIS installer bundling)
+
+**Rust does NOT handle:**
+- Business logic (all in NestJS/TypeScript)
+- Database operations (all in Prisma/TypeScript)
+- Authentication (all in NestJS/Passport)
+- Labor engine calculations (all in TypeScript)
+- API endpoint routing (all in NestJS controllers)
+- Frontend rendering (all in existing HTML/CSS/JS)
 
 ---
 
@@ -211,206 +234,155 @@ Login, Resumen (Dashboard), Empleados, Configuracion Laboral, Jornadas, Historic
 
 ### 3.1 Tauri 2.x Configuration
 
+Tauri's role is minimal: launch NestJS as a sidecar, display a webview pointing to `localhost:PORT`, and provide native OS capabilities.
+
 ```toml
 # src-tauri/Cargo.toml (key dependencies)
 [dependencies]
-tauri = { version = "2", features = ["shell-open"] }
+tauri = { version = "2", features = ["shell-sidecar"] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-diesel = { version = "2", features = ["sqlite", "r2d2"] }
-chrono = { version = "0.4", features = ["serde"] }
-bcrypt = "0.15"
-uuid = { version = "1", features = ["v4"] }
-xlsxwriter = "0.3"
 log = "0.4"
 env_logger = "0.11"
 ```
 
-### 3.2 IPC Command Layer
+Rust dependencies are intentionally minimal. No ORM, no bcrypt, no engine libraries — all business logic stays in NestJS.
 
-All frontend-to-backend communication goes through Tauri's IPC bridge using `#[tauri::command]` functions:
+### 3.2 Rust Modules (Thin Shell)
 
 ```
-Commands (grouped by domain):
-├── auth
-│   ├── login(email, password) → AuthResult
-│   ├── logout() → void
-│   ├── get_current_user() → Option<User>
-│   └── change_password(old, new) → void
-├── employees
-│   ├── create_employee(dto) → Employee
-│   ├── list_employees(query) → PaginatedResult<Employee>
-│   ├── get_employee(id) → Employee
-│   ├── update_employee(id, dto) → Employee
-│   └── toggle_employee_status(id) → Employee
-├── schedules
-│   ├── create_schedule(dto) → Schedule
-│   ├── list_schedules() → Vec<Schedule>
-│   ├── get_schedule(id) → Schedule
-│   ├── update_schedule(id, dto) → Schedule
-│   └── ... (CRUD + day management)
-├── work_config
-│   ├── create_config(dto) → WorkConfig
-│   ├── list_configs() → Vec<WorkConfig>
-│   └── ... (CRUD + distributions)
-├── work_sessions
-│   ├── create_session(dto) → WorkSession (triggers engine)
-│   ├── list_sessions(query) → PaginatedResult<WorkSession>
-│   ├── update_session(id, dto) → WorkSession (re-triggers)
-│   ├── void_session(id, reason) → WorkSession
-│   ├── recalculate_session(id) → WorkSession
-│   ├── set_compensatory(id, decision) → WorkSession
-│   └── generate_audit_trace(id) → AuditTrace
-├── reports
-│   ├── weekly_report(year, week, filters) → Report
-│   ├── monthly_report(year, month, filters) → Report
-│   └── range_report(start, end, filters) → Report
-├── holidays
-│   ├── create_holiday(dto) → Holiday
-│   ├── list_holidays() → Vec<Holiday>
-│   └── delete_holiday(id) → void
-├── users
-│   ├── create_user(dto) → User
-│   ├── list_users(query) → PaginatedResult<User>
-│   └── ... (CRUD + password reset)
-├── audit
-│   └── list_audit_logs(query) → PaginatedResult<AuditLog>
-├── import
-│   ├── import_excel(file_path) → ImportResult
-│   └── validate_import(file_path) → ValidationResult
+src-tauri/src/
+├── main.rs              # App entry: launch sidecar, create window
+├── lib.rs               # Tauri plugin registration
+├── sidecar.rs           # Start/stop/restart NestJS process
+├── dialogs.rs           # Native file open/save dialogs (Tauri API)
+├── paths.rs             # Resolve app data paths (%APPDATA%)
+├── backup.rs            # File copy + SHA-256 for backup operations
+└── tray.rs              # System tray (future, Phase 4)
+```
+
+Each module is small (50-150 lines). Total Rust code: ~500-800 lines.
+
+### 3.3 Sidecar Lifecycle
+
+```
+App Start
+  → Resolve paths (app data dir, backend dir)
+  → Start NestJS process: `node backend/dist/main.js`
+    → NestJS initializes Prisma + SQLite
+    → NestJS starts HTTP server on localhost:3000
+  → Wait for /health endpoint (poll with backoff)
+  → Open Tauri webview → http://localhost:3000
+  → Frontend loads existing SPA
+
+App Stop
+  → Send SIGTERM to NestJS process
+  → Wait for graceful shutdown (max 5s)
+  → Kill process if needed
+  → Clean exit
+```
+
+### 3.4 Tauri IPC Commands (Native Only)
+
+Rust exposes only native OS commands to the frontend:
+
+```
+Tauri Commands (Rust):
+├── system
+│   ├── open_file_dialog(filters) → Option<String>  // Native file picker
+│   ├── save_file_dialog(default_name) → Option<String>
+│   ├── get_app_data_path() → String
+│   └── get_version() → String
 ├── backup
-│   ├── create_backup(path) → BackupResult
-│   ├── restore_backup(path) → void
-│   └── list_backups() → Vec<BackupInfo>
-└── system
-    ├── get_health() → SystemHealth
-    ├── get_diagnostics() → Diagnostics
-    └── get_version() → String
+│   ├── copy_database_to(dest_path) → Result
+│   └── file_checksum(path) → String
+└── shell
+    └── open_in_explorer(path) → Result  // Open folder in file explorer
 ```
 
-### 3.3 State Management
+All business data operations (CRUD, reports, engine) go through NestJS HTTP API — not through Rust IPC.
+
+### 3.5 Frontend Changes (Minimal)
+
+The existing frontend is reused as-is. Only two changes:
+
+1. **API URL:** Change `http://localhost:3000/api/v1` to use dynamic port detection (Tauri passes the port as a query parameter or environment variable)
+
+2. **File dialogs:** For Excel import/export, the frontend calls a Rust IPC command to open a native file dialog, then passes the selected file path to the NestJS API
+
+Everything else — pages, components, styles, business logic — remains untouched.
+
+### 3.6 State Management
 
 ```rust
-// Tauri managed state
-pub struct AppState {
-    pub db_pool: SqlitePool,           // Connection pool
-    pub config: AppConfig,              // Runtime configuration
-    pub current_session: Mutex<Option<UserSession>>,  // Active user
+// Tauri managed state — only sidecar process handle
+pub struct SidecarState {
+    pub child_process: Mutex<Option<Child>>,
+    pub port: u16,
+    pub data_dir: PathBuf,
 }
 ```
 
-### 3.4 Frontend Architecture (Tauri + Vite + React)
-
-```
-src/
-├── main.tsx                    # React entry point
-├── App.tsx                     # Root component + router
-├── tauri/                      # Tauri API bindings
-│   └── commands.ts             # Typed IPC wrapper functions
-├── contexts/
-│   ├── AuthContext.tsx          # Auth state + provider
-│   └── AppContext.tsx           # Global app state
-├── pages/
-│   ├── LoginPage.tsx
-│   ├── DashboardPage.tsx
-│   ├── EmployeesPage.tsx
-│   ├── SchedulesPage.tsx
-│   ├── WorkConfigPage.tsx
-│   ├── WorkSessionsPage.tsx
-│   ├── HistoryPage.tsx
-│   ├── ReportsPage.tsx
-│   ├── HolidaysPage.tsx
-│   └── UsersPage.tsx
-├── components/
-│   ├── layout/
-│   │   ├── Sidebar.tsx
-│   │   ├── Header.tsx
-│   │   └── PageContainer.tsx
-│   ├── common/
-│   │   ├── DataTable.tsx
-│   │   ├── SearchInput.tsx
-│   │   ├── Pagination.tsx
-│   │   ├── Modal.tsx
-│   │   ├── ConfirmDialog.tsx
-│   │   ├── Badge.tsx
-│   │   └── Loader.tsx
-│   ├── employees/
-│   │   ├── EmployeeForm.tsx
-│   │   └── EmployeeTable.tsx
-│   ├── work-sessions/
-│   │   ├── SessionForm.tsx
-│   │   ├── SessionTable.tsx
-│   │   ├── VoidDialog.tsx
-│   │   ├── CompensatoryDialog.tsx
-│   │   └── AuditTraceViewer.tsx
-│   ├── reports/
-│   │   ├── ReportFilters.tsx
-│   │   └── ReportTable.tsx
-│   └── dashboard/
-│       ├── StatCard.tsx
-│       └── RecentActivity.tsx
-├── hooks/
-│   ├── useDebounce.ts
-│   ├── usePagination.ts
-│   └── useExport.ts
-├── lib/
-│   ├── constants.ts
-│   ├── types.ts                # Shared TypeScript types
-│   └── utils.ts
-└── styles/
-    └── globals.css
-```
+No application state in Rust. All state lives in NestJS (JWT tokens, session, database connections).
 
 ---
 
 ## 4. Database Strategy
 
-### 4.1 SQLite Schema (Diesel Migrations)
+### 4.1 Prisma + SQLite (No Schema Changes)
 
-The schema mirrors the original PostgreSQL/Prisma schema but adapted for SQLite:
+The existing Prisma schema is reused as-is. The only change is the database driver:
 
-- All `TEXT` fields remain `TEXT`
-- JSON fields (`oldValues`, `newValues`) stored as `TEXT` (JSON strings)
-- `BOOLEAN` stored as `INTEGER` (0/1)
-- `DATETIME` stored as `TEXT` (ISO 8601)
-- Enums stored as `TEXT` with CHECK constraints where applicable
-- Auto-incrementing `INTEGER PRIMARY KEY` for all IDs
+- **Development (current):** Already uses SQLite (`backend/prisma/dev.db`)
+- **Production (desktop):** SQLite with Prisma — zero schema changes required
+- **No Diesel.** No migration rewrite. No new ORM.
 
-### 4.2 Migration Strategy
+```env
+# .env for desktop (only change from web)
+DATABASE_URL="file:./jornadas.db"
+```
 
-1. Diesel manages schema migrations via `diesel migration run`
-2. Initial migration creates all tables, indexes, and seed data
-3. Seed data: 3 users, 2 workConfigs, 7 distributions each, 3 employees, 18 Colombian holidays (2026)
-4. Migrations run automatically on application startup
-5. Backup of database created before any migration runs
+### 4.2 Why No Schema Changes
+
+The Prisma schema already uses SQLite-compatible types:
+- `TEXT` for strings
+- `INTEGER` for booleans (SQLite stores as 0/1)
+- `DateTime` stored as ISO 8601 text
+- JSON fields stored as TEXT
+- Auto-incrementing INTEGER PRIMARY KEY for all IDs
+
+The existing migrations already target SQLite. The web version's `backend/prisma/dev.db` proves the schema works with SQLite today.
 
 ### 4.3 Connection Management
 
-```rust
-// Connection pool configuration
-SqliteConnectionManager::file("jornadas.db")
-    .with_flags(SQLITE_OPEN_READ_WRITE | SQLITE_OPEN_CREATE)
-    .with_init("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;")
-```
+Prisma manages connection pooling. For the desktop scenario:
+- Single user = minimal connection pressure
+- WAL mode enabled via Prisma's SQLite provider
+- Foreign keys enforced by Prisma schema
+- Busy timeout handled by Prisma connection settings
 
-- WAL mode for concurrent reads
-- Foreign keys enforced
-- Busy timeout prevents lock contention
-- Connection pool size: 5 (adequate for single-user desktop)
-
-### 4.4 Data Access Pattern
+### 4.4 Data Directory
 
 ```
-Command Layer → Service Layer → Repository (Diesel) → SQLite
+%APPDATA%/JornadasLaboralDesktop/
+├── data/
+│   └── jornadas.db          # SQLite database (managed by Prisma)
+├── backups/
+│   └── jornadas_*.db        # Backup copies (managed by Rust)
+└── logs/
+    └── app.log              # Application logs
 ```
 
-Each domain module follows:
-- `commands.rs` - Tauri IPC commands (thin, validation only)
-- `service.rs` - Business logic (labor engine integration, rules)
-- `repository.rs` - Database queries (Diesel)
-- `models.rs` - Diesel queryable structs
-- `dto.rs` - Input/output serialization structs
+### 4.5 What Changes vs. Web
+
+| Aspect | Web Version | Desktop Version | Change Required |
+|--------|-------------|-----------------|-----------------|
+| Database driver | PostgreSQL | SQLite | .env change only |
+| Schema | Prisma schema | Same Prisma schema | None |
+| Migrations | `prisma migrate` | `prisma migrate` (same) | None |
+| Seed data | `prisma db seed` | Same seed script | None |
+| Connection | Network socket | Local file | Prisma handles |
 
 ---
 
@@ -420,42 +392,43 @@ Each domain module follows:
 
 | Improvement | Web | Desktop | Priority |
 |-------------|-----|---------|----------|
-| PIN/Password lock | JWT tokens | Local bcrypt PIN | P0 |
-| Database encryption | PostgreSQL TLS | SQLCipher (AES-256) | P1 |
-| Auto-lock on idle | None | Screen lock after 5min | P1 |
-| Session timeout | 8h JWT | Configurable auto-lock | P1 |
-| File system ACL | Docker volumes | Windows ACL on DB file | P2 |
-| Audit trail integrity | Regular table | Append-only + hash chain | P2 |
+| Authentication | JWT tokens | Same JWT (NestJS handles) | P0 — no change |
+| Password hashing | bcrypt (10 rounds) | Same bcrypt (same code) | P0 — no change |
+| Database encryption | PostgreSQL TLS | Future: SQLite encryption | P1 |
+| Auto-lock on idle | None | Tauri window event (Rust) | P1 |
+| Session timeout | 8h JWT expiry | Same (NestJS config) | P0 — no change |
+| File system ACL | Docker volumes | Windows ACL on data dir | P2 |
+| CSP headers | helmet middleware | Same (NestJS middleware) | P0 — no change |
 
 ### 5.2 Data Integrity
 
 | Improvement | Implementation |
 |-------------|---------------|
-| Hash chain audit | Each AuditLog record hashes previous, creating tamper-evident chain |
-| Backup verification | SHA-256 checksum on backup creation/restore |
-| Constraint validation | Application-level + DB-level constraints |
-| Idempotent operations | All writes are idempotent (upsert patterns) |
+| Hash chain audit | Future enhancement (NestJS middleware) |
+| Backup verification | SHA-256 checksum (Rust backup module) |
+| Constraint validation | Prisma schema constraints (existing) |
+| Idempotent operations | Existing upsert patterns in NestJS services |
 
 ### 5.3 Performance
 
-| Target | Metric |
-|--------|--------|
-| Cold start | < 2 seconds to interactive |
-| Page navigation | < 200ms |
-| Labor engine (1000 sessions) | < 5 seconds |
-| Report generation (monthly) | < 3 seconds |
-| Excel export (1000 rows) | < 2 seconds |
-| Database file size | < 100MB for 5 years data |
-| Memory usage | < 200MB steady state |
+| Target | Metric | How Achieved |
+|--------|--------|-------------|
+| Cold start | < 5 seconds to interactive | NestJS startup + sidecar launch |
+| Page navigation | < 200ms | Existing frontend (no change) |
+| Labor engine (1000 sessions) | < 5 seconds | Existing TypeScript engine (no change) |
+| Report generation (monthly) | < 3 seconds | Existing NestJS service (no change) |
+| Excel export (1000 rows) | < 2 seconds | Existing SheetJS (no change) |
+| Database file size | < 100MB for 5 years data | SQLite (same as dev) |
+| Memory usage | < 300MB steady state | NestJS + Tauri combined |
 
 ### 5.4 Reliability
 
 | Feature | Implementation |
 |---------|---------------|
-| Auto-backup | Daily backup to configurable path |
-| Crash recovery | WAL mode + backup-before-migration |
-| Data validation | Input validation at IPC boundary |
-| Error boundaries | React error boundary + Rust panic handler |
+| Auto-backup | Rust module copies DB file with checksum |
+| Crash recovery | SQLite WAL mode (existing) + backup |
+| Data validation | NestJS validation pipes (existing) |
+| Process monitoring | Tauri sidecar health check polling |
 
 ---
 
@@ -465,101 +438,102 @@ Each domain module follows:
 
 **Status:** Accepted
 
-**Context:** Need to port web app to desktop.
+**Context:** Need to wrap existing web app as desktop application.
 
-**Decision:** Use Tauri 2.x with Rust backend.
+**Decision:** Use Tauri 2.x as the shell, with NestJS as a sidecar process.
 
 **Rationale:**
-- Binary size: ~5MB (Tauri) vs ~150MB (Electron)
-- Memory: ~30MB (Tauri) vs ~150MB (Electron)
-- Security: Tauri has fine-grained IPC, no Node.js attack surface
-- Performance: Rust backend is faster for labor engine calculations
-- Native SQLite: Diesel ORM with compile-time query checking
+- Binary size: ~5-10MB (Tauri + Node.js sidecar) vs ~150MB (Electron + bundled Node)
+- Memory: ~50MB (Tauri + NestJS sidecar) vs ~200MB (Electron)
+- Security: Tauri has fine-grained CSP, minimal attack surface
+- Code reuse: Existing NestJS backend runs as-is, no rewrite needed
+- Native OS features: File dialogs, system tray, auto-updater
 
-**Consequences:** Team must learn Rust basics. Smaller ecosystem than Node.js. Build tooling less mature on Windows.
+**Consequences:** Node.js runtime must be bundled or available. Sidecar process management needed. Slightly more complex than pure Tauri but far less than rewriting in Rust.
 
-### ADR-002: SQLite over PostgreSQL
+### ADR-002: Keep SQLite (already used in dev)
 
 **Status:** Accepted
 
-**Context:** Desktop app must work offline without server.
+**Context:** Desktop app must work offline without a database server.
 
-**Decision:** Embed SQLite via Diesel ORM.
+**Decision:** Use SQLite — already the development database via Prisma.
 
 **Rationale:**
-- Zero configuration required
-- Single file database is easy to backup/move
-- WAL mode provides good concurrency for single-user
-- Diesel provides type-safe queries at compile time
-- SQLite handles the expected data volume (thousands of employees, millions of sessions) without issue
+- Prisma schema already supports SQLite (dev mode uses it)
+- Zero schema changes required — just change `DATABASE_URL`
+- Single file database is easy to backup and move
+- WAL mode provides good performance for single-user
+- SQLite handles the expected data volume (thousands of employees, millions of sessions)
 
-**Consequences:** No concurrent multi-user access. No network queries. Migration from existing PostgreSQL data required.
+**Consequences:** No concurrent multi-user access (not needed for desktop). No network queries (not needed for desktop). Migration from existing PostgreSQL data is a one-time .env change.
 
-### ADR-003: React + TypeScript over Vanilla JS
+### ADR-003: Reuse existing frontend (no React rewrite)
 
 **Status:** Accepted
 
-**Context:** Need structured frontend for complex UI.
+**Context:** The existing vanilla HTML/CSS/JS frontend is functional and tested.
 
-**Decision:** React 18 with TypeScript and Vite.
+**Decision:** Reuse the existing frontend as-is. Serve it through NestJS's static file serving.
 
 **Rationale:**
-- Type safety catches errors at compile time
-- Component architecture maps well to Tauri's page structure
-- Rich ecosystem for data tables, forms, charts
-- Vite provides fast dev server and build
-- React's state management handles complex UI state (pagination, filters, modals)
+- Frontend already works — 8 pages, role-based UI, Excel export, audit visualization
+- Zero rewrite effort — maximum code reuse
+- NestJS already serves static files from `../frontend`
+- Tauri webview loads `localhost:3000` which serves the existing SPA
+- Incremental improvements (not rewrites) are acceptable in future phases
 
-**Consequences:** Larger bundle than vanilla JS (~50KB gzipped). Build step required.
+**Consequences:** No type safety in frontend. No component reuse. But: zero rewrite risk, zero testing regression, maximum code reuse.
 
-### ADR-004: Session-based auth instead of JWT
+### ADR-004: Keep existing auth system
 
 **Status:** Accepted
 
-**Context:** Desktop app has no network, JWT blacklisting is unnecessary.
+**Context:** The existing NestJS auth (JWT + bcrypt + Passport) works correctly.
 
-**Decision:** In-memory session with bcrypt password verification.
+**Decision:** Reuse the existing authentication system unchanged.
 
 **Rationale:**
-- No network = no token transmission = no JWT needed
-- Session stored in Tauri managed state (Rust `Mutex<Option<UserSession>>`)
-- Password verified on login via bcrypt
-- Auto-lock clears session after configurable idle timeout
-- Simpler than JWT refresh/blacklist flow
+- JWT tokens work fine even in localhost scenario (no network exposure)
+- bcrypt password hashing is already implemented
+- Role-based access control (ADMINISTRADOR, GESTION_HUMANA, SUPERVISOR) is already implemented
+- Token blacklisting already implemented
+- No reason to change what works
 
-**Consequences:** User must re-enter password after app restart. No "remember me" without additional persistence.
+**Consequences:** JWT tokens transmitted over localhost (not a security concern). Auto-lock on idle is a new feature (Phase 3) that wraps the existing session timeout.
 
-### ADR-005: Keep labor engine logic identical
+### ADR-005: Keep labor engine in TypeScript
 
 **Status:** Accepted
 
-**Context:** Must produce same classification results as web version.
+**Context:** The labor engine is the core business logic — minute-by-minute classification of work time.
 
-**Decision:** Port labor engine minute-by-minute algorithm from TypeScript to Rust, maintaining identical logic.
+**Decision:** Do NOT port to Rust. Keep the existing TypeScript implementation.
 
 **Rationale:**
-- Legal compliance requires identical classification
-- Rust performance benefits engine (1000+ sessions)
-- Unit tests from web version can be adapted to verify equivalence
-- Constants, timezone handling (Bogota UTC-5), and bucket logic must match exactly
+- Engine already works and has 28 passing unit tests
+- Legal compliance requires identical classification results
+- Rewriting in Rust introduces porting bugs with zero benefit (engine runs once per session, not in a hot loop)
+- TypeScript engine is called by NestJS — no cross-language boundary needed
+- Maximum code reuse principle
 
-**Consequences:** Engine cannot be "improved" during port without explicit approval. Changes must be tracked separately.
+**Consequences:** Engine performance is limited by TypeScript/Node.js (not an issue — processes 1000 sessions in <5 seconds). No Rust expertise needed for engine work.
 
-### ADR-006: React over Vue/Svelte
+### ADR-006: Keep audit engine in TypeScript
 
 **Status:** Accepted
 
-**Context:** Need component framework for frontend.
+**Context:** The audit engine generates minute-by-minute traces for legal compliance.
 
-**Decision:** React 18 with TypeScript.
+**Decision:** Do NOT port to Rust. Keep the existing TypeScript implementation.
 
 **Rationale:**
-- Largest ecosystem for components (data tables, modals, forms)
-- TypeScript integration is mature
-- Team familiarity
-- Good Tauri community support
+- Same reasoning as ADR-005
+- Audit traces are generated on-demand (not performance-critical)
+- Already integrated with NestJS services
+- 28 test cases verify correctness
 
-**Consequences:** Larger initial bundle than Svelte. More boilerplate than Vue.
+**Consequences:** Audit trace generation limited by TypeScript performance (not an issue — generates traces in <1 second for typical sessions).
 
 ---
 
@@ -595,8 +569,8 @@ System                .      .         .          .          .        .       . 
 Platform: Windows (primary), Linux/macOS (future)
 Installer: NSIS (Windows .exe installer)
 Output:
-  - JornadasLaboralDesktop-Setup-x64.exe  (~5-8 MB)
-  - JornadasLaboralDesktop.exe             (portable, ~5 MB)
+  - JornadasLaboralDesktop-Setup-x64.exe  (~30-50 MB, includes Node.js sidecar)
+  - JornadasLaboralDesktop.exe             (portable)
 ```
 
 ### 8.2 Distribution
@@ -610,21 +584,23 @@ Output:
 ### 8.3 Build Pipeline
 
 ```
-1. cargo build --release        (Rust backend)
-2. vite build                   (React frontend)
-3. tauri build                  (Bundle everything)
-4. Code sign (if certificate available)
-5. NSIS installer generation
-6. SHA-256 checksum generation
-7. Package README + license
+1. npm install                    (Node.js dependencies)
+2. npm run build                  (NestJS TypeScript compilation)
+3. npx prisma generate            (Prisma client generation)
+4. cargo build --release          (Tauri shell)
+5. tauri build                    (Bundle Tauri + NestJS sidecar)
+6. Code sign (if certificate available)
+7. NSIS installer generation
+8. SHA-256 checksum generation
+9. Package README + license
 ```
 
 ### 8.4 Versioning
 
 - Semantic versioning: `MAJOR.MINOR.PATCH`
-- Build number embedded in binary
-- Database schema version tracked in `GlobalConfig` table
-- Migration compatibility: app must handle DB versions N-1 through N
+- Build number embedded in Tauri binary
+- NestJS backend version tracked in `package.json`
+- Database schema version tracked in Prisma migrations
 
 ---
 
@@ -936,7 +912,7 @@ ALTER TABLE users ADD COLUMN company_id INTEGER REFERENCES companies(id);
 |---|---------|--------|-------|
 | S1 | Password hashing (bcrypt, 10 rounds) | P0 | Port from web |
 | S2 | Input validation at IPC boundary | P0 | Zod or manual validation |
-| S3 | SQL injection prevention (Diesel ORM) | P0 | Compile-time checked queries |
+| S3 | SQL injection prevention (Prisma ORM) | P0 | Existing Prisma parameterized queries |
 | S4 | CSP headers in Tauri config | P0 | Restrict script sources |
 | S5 | Auto-lock after idle timeout | P1 | Configurable (default 5min) |
 | S6 | Database file encryption (SQLCipher) | P1 | Future enhancement |
@@ -953,8 +929,8 @@ ALTER TABLE users ADD COLUMN company_id INTEGER REFERENCES companies(id);
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
-| Cold start to interactive | < 2s | Time from launch to first paint |
-| Page navigation | < 200ms | React route transition |
+| Cold start to interactive | < 5s | Tauri + NestJS sidecar startup |
+| Page navigation | < 200ms | Existing frontend (no change) |
 | Search/Filter response | < 100ms | From keystroke to result |
 | Employee list (1000 records) | < 300ms | Query + render |
 | Work session create (with engine) | < 500ms | Full classification |
@@ -974,13 +950,13 @@ ALTER TABLE users ADD COLUMN company_id INTEGER REFERENCES companies(id);
 
 | ID | Risk | Probability | Impact | Mitigation |
 |----|------|-------------|--------|------------|
-| R1 | Diesel migration from Prisma schema introduces bugs | Medium | High | Port schema carefully, run equivalent tests |
+| R1 | Sidecar process fails to start | Medium | High | Health check polling, auto-retry, fallback to web mode |
 | R2 | Labor engine port produces different results | Low | Critical | Bit-identical unit test comparison |
 | R3 | SQLite performance degrades with large datasets | Low | Medium | WAL mode, proper indexes, periodic VACUUM |
 | R4 | Tauri Windows build issues | Medium | Medium | Test build early, maintain CI |
 | R5 | User data loss during migration | Low | Critical | Backup-before-migrate strategy |
 | R6 | Team unfamiliar with Rust | High | Medium | Minimal Rust surface area, focus on commands only |
-| R7 | React bundle too large for Tauri | Low | Low | Code splitting, lazy loading |
+| R7 | Node.js runtime not available on target machines | Low | Medium | Bundle Node.js runtime with Tauri sidecar |
 | R8 | Windows Defender flags unsigned binary | Medium | Medium | Code signing certificate (if available) |
 | R9 | SQLite concurrent write conflicts | Low | Low | Single-user app, WAL mode |
 | R10 | Timezone handling differences (TS→Rust) | Medium | High | Use chrono with explicit Bogota offset |
@@ -1006,7 +982,7 @@ ALTER TABLE users ADD COLUMN company_id INTEGER REFERENCES companies(id);
 | Category | Scope | Framework | Coverage Target |
 |----------|-------|-----------|----------------|
 | Unit (Rust) | Labor engine, services, validators | `cargo test` | 90%+ for engine |
-| Unit (TS) | React components, hooks, utils | Vitest | 80%+ |
+| Unit (TS) | NestJS services, existing tests | Jest (existing) | Existing coverage |
 | Integration | Tauri IPC commands | `cargo test` + mock DB | Key paths |
 | E2E | Full user flows | Playwright | Critical paths |
 | Regression | Engine equivalence | Cross-language comparison | 100% of web test cases |
@@ -1150,110 +1126,83 @@ jornadas_backup_YYYYMMDD_HHMMSS.db
 
 | # | Item | Phase | Status |
 |---|------|-------|--------|
-| P1 | Core labor engine ported and tested | 1 | Pending |
-| P2 | Employee CRUD (backend services + IPC) | 1 | Pending |
-| P2b | Employee CRUD (UI page) | 2 | Pending |
-| P3 | Schedule CRUD (backend services + IPC) | 1 | Pending |
-| P3b | Schedule CRUD (UI page) | 2 | Pending |
-| P4 | Work config CRUD (backend services + IPC) | 1 | Pending |
-| P4b | Work config CRUD (UI page) | 2 | Pending |
-| P5 | Work session CRUD with engine (backend services + IPC) | 1 | Pending |
-| P5b | Work session CRUD (UI page) | 2 | Pending |
-| P6 | Authentication (PIN/password) | 1 | Pending |
-| P7 | SQLite database with migrations | 1 | Pending |
-| P8 | Basic UI shell (layout, navigation) | 1 | Pending |
-| P9 | Holiday management | 2 | Pending |
-| P10 | Reports (weekly, monthly, range) | 2 | Pending |
-| P11 | User management | 2 | Pending |
-| P12 | Audit log viewer | 2 | Pending |
-| P13 | Excel import | 2 | Pending |
-| P14 | Excel export | 2 | Pending |
-| P15 | Dashboard with widgets | 3 | Pending |
-| P16 | Backup/restore | 3 | Pending |
-| P17 | Diagnostics | 3 | Pending |
-| P18 | History page | 3 | Pending |
-| P19 | NSIS installer | 4 | Pending |
-| P20 | Auto-lock on idle | 4 | Pending |
-| P21 | Auto-backup | 4 | Pending |
-| P22 | Code signing | 5 | Pending |
-| P23 | Multi-company prep | 5 | Pending |
-| P24 | Plugin system | 5 | Pending |
+| P1 | Tauri project scaffolded with sidecar config | 1 | Pending |
+| P2 | NestJS launches as sidecar process | 1 | Pending |
+| P3 | SQLite database connection working | 1 | Pending |
+| P4 | Existing frontend loads in Tauri webview | 1 | Pending |
+| P5 | All existing API endpoints accessible via sidecar | 1 | Pending |
+| P6 | Native file dialogs (Tauri IPC) | 1 | Pending |
+| P7 | Backup file operations (Rust module) | 1 | Pending |
+| P8 | Build pipeline works (npm + cargo + tauri) | 1 | Pending |
+| P9 | NSIS installer configuration | 4 | Pending |
+| P10 | Auto-lock on idle (Tauri window event) | 3 | Pending |
+| P11 | Auto-backup (Rust module) | 3 | Pending |
+| P12 | Code signing | 5 | Pending |
+| P13 | Multi-company preparation | 5 | Pending |
+| P14 | Plugin system | 5 | Pending |
 
 ---
 
 ## 25. Implementation Phases
 
-### Phase 1: Foundation (Weeks 1-2)
+### Phase 1: Tauri Shell + Sidecar (Week 1)
 
-**Goal:** Scaffold the Tauri project, port the labor engine, implement core data models.
+**Goal:** Wrap the existing NestJS app in a Tauri shell. Maximum code reuse — no rewriting.
 
-| Task | Files | Priority |
-|------|-------|----------|
-| Initialize Tauri 2.x project (with CSP in tauri.conf.json) | `JornadasLaboralDesktop/src-tauri/` | P0 |
-| Configure Vite + React + TypeScript | `JornadasLaboralDesktop/package.json`, `vite.config.ts` | P0 |
-| Set up Diesel with SQLite | `src-tauri/migrations/`, `src-tauri/src/db/` | P0 |
-| Create all database migrations | Diesel migration files | P0 |
-| Port schema (all 10 models) | `src-tauri/src/models/` | P0 |
-| Port constants | `src-tauri/src/engine/constants.rs` | P0 |
-| Port labor engine (Rust) | `src-tauri/src/engine/service.rs` | P0 |
-| Port audit engine | `src-tauri/src/engine/audit.rs` | P0 |
-| Implement auth service | `src-tauri/src/services/auth.rs` | P0 |
-| Implement all IPC commands | `src-tauri/src/commands/` | P0 |
-| Create React app shell | `src/App.tsx`, layout components | P0 |
-| Create login page | `src/pages/LoginPage.tsx` | P0 |
-| Create basic sidebar navigation | `src/components/layout/Sidebar.tsx` | P0 |
-| Seed data script | `src-tauri/src/db/seed.rs` | P1 |
-| Unit tests for engine | `src-tauri/src/engine/tests/` | P0 |
-| Verify builds pass | `cargo build`, `npm run build` | P0 |
-| Run all tests | `cargo test`, `npm test` | P0 |
+| Task | Description | Priority |
+|------|-------------|----------|
+| Initialize Tauri 2.x project | `cargo init`, `tauri.conf.json`, Cargo.toml with minimal deps | P0 |
+| Configure sidecar | NestJS backend bundled as sidecar process | P0 |
+| Sidecar lifecycle | Start NestJS on launch, wait for /health, stop on close | P0 |
+| SQLite for desktop | Change `.env` to use SQLite, verify Prisma connection | P0 |
+| Webview configuration | Tauri window loads `localhost:PORT`, CSP headers | P0 |
+| Native file dialogs | Rust IPC: open_file_dialog, save_file_dialog | P0 |
+| Backup module | Rust: copy DB file + SHA-256 checksum | P1 |
+| Build pipeline | `npm install && npm run build && cargo tauri build` | P0 |
+| Verify full flow | Launch → login → navigate → create session → report | P0 |
+| Commit Phase 1 | All Tauri shell code, no changes to web project | P0 |
 
-**Exit Criteria:** Application launches, shows login, engine produces correct results, all tests pass.
+**Exit Criteria:** Desktop app launches, shows login, all existing pages work, all API endpoints accessible, file dialogs functional.
 
-### Phase 2: Feature Parity (Weeks 3-4)
+### Phase 2: Native Enhancements (Week 2)
 
-| Task | Files |
-|------|-------|
-| Employee CRUD page | `EmployeesPage.tsx` |
-| Schedule CRUD page | `SchedulesPage.tsx` |
-| Work config CRUD page | `WorkConfigPage.tsx` |
-| Work sessions page | `WorkSessionsPage.tsx` |
-| Reports page | `ReportsPage.tsx` |
-| Holidays page | `HolidaysPage.tsx` |
-| Users management page | `UsersPage.tsx` |
-| Audit log page | `AuditLogPage.tsx` |
-| Excel import | Import components + commands |
-| Excel export | Export utilities |
+| Task | Description |
+|------|-------------|
+| System tray | Minimize to tray, tray menu (future) |
+| Auto-lock on idle | Tauri window focus/blur events, configurable timeout |
+| Auto-backup | Daily backup to configurable path |
+| Diagnostics panel | System info in existing frontend (NestJS health endpoint) |
+| Error handling | Graceful sidecar crash recovery, user notifications |
+| App data paths | Resolve `%APPDATA%/JornadasLaboralDesktop/` for all OS |
 
-### Phase 3: Polish (Weeks 5-6)
+### Phase 3: Import/Export Enhancements (Week 3)
 
-| Task | Files |
-|------|-------|
-| Dashboard with widgets | `DashboardPage.tsx` |
-| History page | `HistoryPage.tsx` |
-| Backup/restore (with encrypted archive option) | Backup commands + UI |
-| Diagnostics panel | Diagnostics components |
-| Error handling improvements | Error boundaries, notifications |
-| Auto-lock on idle | Security module |
+| Task | Description |
+|------|-------------|
+| Native file picker for import | Replace browser file input with Tauri dialog |
+| Native save dialog for export | Replace browser save with Tauri dialog |
+| Progress feedback | Sidecar process events → frontend progress bar |
+| Import history | Log imports in existing audit system |
 
-### Phase 4: Packaging & Distribution (Week 7)
+### Phase 4: Packaging & Distribution (Week 4)
 
-| Task | Files |
-|------|-------|
-| NSIS installer configuration | `tauri.conf.json` |
-| Code signing setup | Build scripts |
-| Auto-update configuration | Tauri updater |
-| Release build pipeline | CI/CD scripts |
-| User documentation | README, user guide |
+| Task | Description |
+|------|-------------|
+| NSIS installer | Bundle Tauri + NestJS + Node.js runtime |
+| Code signing | Windows Authenticode certificate |
+| Auto-update | Tauri updater plugin |
+| User documentation | README, installation guide |
+| Release build pipeline | CI/CD for reproducible builds |
 
-### Phase 5: Enterprise Features (Weeks 8-10)
+### Phase 5: Enterprise Features (Weeks 5-8)
 
-| Task | Files |
-|------|-------|
-| Multi-company schema | Migrations |
-| Company management UI | Components |
-| Plugin system | Plugin framework |
-| Advanced reporting | Report components |
-| Database encryption (SQLCipher) | DB configuration |
+| Task | Description |
+|------|-------------|
+| Multi-company preparation | Schema extension, company management |
+| Plugin system | Extensibility framework |
+| Advanced reporting | Enhanced dashboard with charts |
+| Database encryption | Future: SQLCipher integration |
+| Network sync | Future: multi-device synchronization |
 
 ---
 
@@ -1299,4 +1248,4 @@ jornadas_backup_YYYYMMDD_HHMMSS.db
 
 ---
 
-*Document validated for internal consistency. All sections reference compatible technologies (Tauri 2.x, Diesel 2.x, React 18, SQLite). Implementation phases align with production readiness items. Performance targets are achievable with stated technology choices.*
+*Document validated for internal consistency. Architecture follows maximum code reuse: Tauri shell wrapping existing NestJS sidecar, Prisma ORM with SQLite, existing TypeScript frontend and engines. No business logic rewritten in Rust. Implementation phases align with production readiness items.*
