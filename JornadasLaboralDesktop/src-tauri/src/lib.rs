@@ -5,6 +5,11 @@ mod import_engine;
 mod sidecar;
 mod startup;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -49,6 +54,9 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if SHUTTING_DOWN.swap(true, Ordering::SeqCst) {
+                    return;
+                }
                 log::info!("Window close requested, performing graceful shutdown...");
                 use tauri::Manager;
                 if let Some(sidecar) =
@@ -57,7 +65,7 @@ pub fn run() {
                     startup::run_shutdown(&sidecar);
                 }
                 api.prevent_close();
-                window.close().ok();
+                window.destroy().ok();
             }
         })
         .invoke_handler(tauri::generate_handler![

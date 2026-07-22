@@ -36,20 +36,5 @@
       }
     }
   },
-  "plugins": {
-    "dialog": {
-      "open": true,
-      "save": true
-    },
-    "fs": {
-      "scope": {
-        "allow": [
-          "$APPDATA/**",
-          "$RESOURCE/**",
-          "$DOWNLOAD/**"
-        ],
-        "deny": []
-      }
-    }
-  }
+  "plugins": {}
 }
