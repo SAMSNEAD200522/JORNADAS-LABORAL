@@ -213,8 +213,9 @@ function renderSidebar() {
     { id: 'resumen', label: 'Resumen', icon: 'dashboard', roles: ['ADMINISTRADOR', 'GESTION_HUMANA', 'SUPERVISOR'] },
     { id: 'empleados', label: 'Empleados', icon: 'people', roles: ['ADMINISTRADOR', 'GESTION_HUMANA'] },
     { id: 'jornadas', label: 'Jornadas', icon: 'event_note', roles: ['ADMINISTRADOR', 'GESTION_HUMANA', 'SUPERVISOR'] },
-    { id: 'historico', label: 'Histórico', icon: 'history', roles: ['ADMINISTRADOR', 'GESTION_HUMANA', 'SUPERVISOR'] },
+    { id: 'historico', label: 'Hist\u00f3rico', icon: 'history', roles: ['ADMINISTRADOR', 'GESTION_HUMANA', 'SUPERVISOR'] },
     { id: 'reportes', label: 'Reportes', icon: 'bar_chart', roles: ['ADMINISTRADOR', 'GESTION_HUMANA', 'SUPERVISOR'] },
+    { id: 'importacion', label: 'Importar', icon: 'upload_file', roles: ['ADMINISTRADOR', 'GESTION_HUMANA'] },
     { id: 'festivos', label: 'Festivos', icon: 'celebration', roles: ['ADMINISTRADOR'] },
     { id: 'configuracion', label: 'Config. laboral', icon: 'schedule', roles: ['ADMINISTRADOR'] },
     { id: 'usuarios', label: 'Usuarios', icon: 'manage_accounts', roles: ['ADMINISTRADOR'] },
@@ -242,6 +243,7 @@ function navigate(page) {
     case 'historico': renderHistorico(); break;
     case 'festivos': renderFestivos(); break;
     case 'reportes': renderReportes(); break;
+    case 'importacion': renderImportacion(); break;
     case 'usuarios': renderUsuarios(); break;
   }
 }
@@ -1488,6 +1490,499 @@ async function exportHistoricXLSX() {
     downloadXLSX(filename + '.xlsx', headers, rows);
     snackbar('Excel exportado');
   } catch (e) { snackbar('Error al exportar', true); }
+}
+
+/* ------- IMPORTACION ------- */
+let importState = {
+  file: null,
+  filePath: null,
+  module: 'employees',
+  preview: null,
+  autoCreateRefs: false,
+  updateExisting: true,
+  dryRun: false,
+};
+
+const MODULE_LABELS = {
+  employees: 'Empleados',
+  work_sessions: 'Jornadas laborales',
+  holidays: 'Festivos',
+  users: 'Usuarios',
+  companies: 'Empresas',
+  departments: 'Departamentos',
+  positions: 'Cargos',
+  cost_centers: 'Centros de costo',
+  work_configurations: 'Configuraciones laborales',
+};
+
+async function renderImportacion() {
+  importState = { file: null, filePath: null, module: 'employees', preview: null, autoCreateRefs: false, updateExisting: true, dryRun: false };
+
+  document.getElementById('pageContent').innerHTML = `
+    <div class="page-header"><h1>Centro de Importaci\u00f3n</h1></div>
+    <div class="import-center">
+      <div class="import-tabs">
+        <button class="import-tab active" data-tab="upload" onclick="switchImportTab('upload')">Importar</button>
+        <button class="import-tab" data-tab="templates" onclick="switchImportTab('templates')">Plantillas</button>
+        <button class="import-tab" data-tab="history" onclick="switchImportTab('history')">Historial</button>
+      </div>
+
+      <div class="import-tab-content active" id="tabUpload">
+        <div class="card">
+          <h3 class="card-title">Seleccionar archivo</h3>
+          <div class="import-upload-area" id="uploadArea">
+            <div class="import-upload-icon">
+              <span class="material-icons" style="font-size:48px;color:var(--primary)">cloud_upload</span>
+            </div>
+            <p>Arrastra un archivo aqu\u00ed o haz clic para seleccionar</p>
+            <p style="font-size:12px;color:var(--text-muted)">Formatos soportados: Excel (.xlsx), CSV, ODS</p>
+            <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv,.ods" style="display:none" onchange="onImportFileSelect(event)">
+          </div>
+          <div id="importFileInfo" style="display:none;margin-top:12px"></div>
+
+          <div class="form-row" style="margin-top:16px">
+            <div class="form-group half">
+              <label>M\u00f3dulo destino</label>
+              <select id="importModule" onchange="importState.module=this.value">
+                <option value="employees">Empleados</option>
+                <option value="work_sessions">Jornadas laborales</option>
+                <option value="holidays">Festivos</option>
+              </select>
+            </div>
+            <div class="form-group half">
+              <label>Opciones</label>
+              <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                  <input type="checkbox" id="importAutoRefs" onchange="importState.autoCreateRefs=this.checked"> Crear referencias autom\u00e1ticamente
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                  <input type="checkbox" id="importUpdateExisting" checked onchange="importState.updateExisting=this.checked"> Actualizar existentes
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                  <input type="checkbox" id="importDryRun" onchange="importState.dryRun=this.checked"> Modo simulaci\u00f3n
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button class="btn btn-secondary" id="btnPreviewImport" disabled onclick="previewImportFile()">Vista previa</button>
+            <button class="btn btn-primary" id="btnExecuteImport" disabled onclick="executeImportFile()">Ejecutar importaci\u00f3n</button>
+          </div>
+        </div>
+
+        <div id="importPreviewSection" style="display:none;margin-top:16px">
+          <div class="card">
+            <h3 class="card-title">Resultado de validaci\u00f3n</h3>
+            <div id="importPreviewSummary"></div>
+            <div id="importPreviewErrors" style="margin-top:12px"></div>
+            <div id="importPreviewTable" style="margin-top:12px"></div>
+          </div>
+        </div>
+
+        <div id="importResultSection" style="display:none;margin-top:16px">
+          <div class="card">
+            <h3 class="card-title">Resultado de importaci\u00f3n</h3>
+            <div id="importResultContent"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="import-tab-content" id="tabTemplates" style="display:none">
+        <div class="card">
+          <h3 class="card-title">Descargar plantillas</h3>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Descarga la plantilla exacta que necesitas para importar datos.</p>
+          <div class="import-template-grid">
+            <div class="import-template-card">
+              <span class="material-icons" style="font-size:32px;color:var(--primary)">people</span>
+              <h4>Plantilla de empleados</h4>
+              <p style="font-size:12px;color:var(--text-muted)">Formato estándar para importar empleados</p>
+              <button class="btn btn-sm btn-primary" onclick="downloadEmployeeTemplate()">Descargar</button>
+            </div>
+            <div class="import-template-card">
+              <span class="material-icons" style="font-size:32px;color:var(--primary)">event_note</span>
+              <h4>Plantilla de jornadas</h4>
+              <p style="font-size:12px;color:var(--text-muted)">Formato del cliente para jornadas laborales</p>
+              <button class="btn btn-sm btn-primary" onclick="downloadWorkSessionTemplate()">Descargar</button>
+            </div>
+            <div class="import-template-card">
+              <span class="material-icons" style="font-size:32px;color:var(--primary)">download</span>
+              <h4>Exportar empleados</h4>
+              <p style="font-size:12px;color:var(--text-muted)">Exporta empleados existentes en formato de plantilla</p>
+              <button class="btn btn-sm btn-secondary" onclick="exportEmployeesTemplate()">Exportar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="import-tab-content" id="tabHistory" style="display:none">
+        <div class="card">
+          <h3 class="card-title">Historial de importaciones</h3>
+          <div class="table-wrap" style="margin-top:12px">
+            <table><thead><tr>
+              <th>Fecha</th><th>Usuario</th><th>Archivo</th><th>M\u00f3dulo</th><th>Duraci\u00f3n</th><th>Total</th><th>Insertadas</th><th>Actualizadas</th><th>Errores</th><th>Estado</th><th>Acciones</th>
+            </tr></thead><tbody id="importHistoryTbody"></tbody></table>
+          </div>
+          <div class="pagination" id="importHistoryPagination"></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('uploadArea').addEventListener('click', () => {
+    document.getElementById('importFileInput').click();
+  });
+
+  const uploadArea = document.getElementById('uploadArea');
+  uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('import-drag-over'); });
+  uploadArea.addEventListener('dragleave', () => { uploadArea.classList.remove('import-drag-over'); });
+  uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('import-drag-over');
+    if (e.dataTransfer.files.length > 0) {
+      handleImportFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  loadImportHistory();
+}
+
+function switchImportTab(tab) {
+  document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.import-tab[data-tab="${tab}"]`).classList.add('active');
+  document.querySelectorAll('.import-tab-content').forEach(c => { c.style.display = 'none'; c.classList.remove('active'); });
+  const target = document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
+  if (target) { target.style.display = ''; target.classList.add('active'); }
+  if (tab === 'history') loadImportHistory();
+}
+
+function onImportFileSelect(event) {
+  if (event.target.files.length > 0) {
+    handleImportFile(event.target.files[0]);
+  }
+}
+
+async function handleImportFile(file) {
+  importState.file = file;
+  importState.preview = null;
+
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['xlsx', 'xls', 'csv', 'ods'].includes(ext)) {
+    snackbar('Formato no soportado. Use Excel, CSV o ODS.', true);
+    return;
+  }
+
+  document.getElementById('importFileInfo').style.display = 'block';
+  document.getElementById('importFileInfo').innerHTML = `
+    <div class="import-file-info">
+      <span class="material-icons" style="color:var(--primary)">description</span>
+      <div>
+        <strong>${escapeHtml(file.name)}</strong>
+        <span style="color:var(--text-muted);font-size:12px;margin-left:8px">${(file.size / 1024).toFixed(1)} KB</span>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="clearImportFile()" style="margin-left:auto">Quitar</button>
+    </div>
+  `;
+
+  document.getElementById('btnPreviewImport').disabled = false;
+  document.getElementById('btnExecuteImport').disabled = true;
+  document.getElementById('importPreviewSection').style.display = 'none';
+  document.getElementById('importResultSection').style.display = 'none';
+}
+
+function clearImportFile() {
+  importState.file = null;
+  importState.filePath = null;
+  importState.preview = null;
+  document.getElementById('importFileInput').value = '';
+  document.getElementById('importFileInfo').style.display = 'none';
+  document.getElementById('btnPreviewImport').disabled = true;
+  document.getElementById('btnExecuteImport').disabled = true;
+  document.getElementById('importPreviewSection').style.display = 'none';
+  document.getElementById('importResultSection').style.display = 'none';
+}
+
+async function previewImportFile() {
+  if (!importState.file) { snackbar('Seleccione un archivo primero', true); return; }
+
+  document.getElementById('btnPreviewImport').disabled = true;
+  document.getElementById('btnPreviewImport').textContent = 'Validando...';
+  document.getElementById('importPreviewSection').style.display = 'none';
+
+  try {
+    const formData = new FormData();
+    formData.append('file', importState.file);
+
+    const token = localStorage.getItem('token');
+    const uploadRes = await fetch(`${API}/import/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+
+    if (!uploadRes.ok) throw { mensaje: 'Error al subir archivo' };
+    const uploadData = await uploadRes.json();
+    importState.filePath = uploadData.filePath;
+
+    const previewRes = await fetch(`${API}/import/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        filePath: importState.filePath,
+        module: importState.module,
+        autoCreateReferences: importState.autoCreateRefs,
+        updateExisting: importState.updateExisting,
+      }),
+    });
+
+    if (!previewRes.ok) throw { mensaje: 'Error al validar archivo' };
+    const previewData = await previewRes.json();
+    importState.preview = previewData;
+
+    renderImportPreview(previewData);
+
+    if (previewData.summary.invalidRows === 0) {
+      document.getElementById('btnExecuteImport').disabled = false;
+    }
+  } catch (e) {
+    snackbar(e.mensaje || 'Error al procesar archivo', true);
+  } finally {
+    document.getElementById('btnPreviewImport').disabled = false;
+    document.getElementById('btnPreviewImport').textContent = 'Vista previa';
+  }
+}
+
+function renderImportPreview(data) {
+  const section = document.getElementById('importPreviewSection');
+  section.style.display = '';
+
+  const s = data.summary;
+  document.getElementById('importPreviewSummary').innerHTML = `
+    <div class="import-summary-grid">
+      <div class="import-summary-item">
+        <span class="import-summary-value">${s.totalRows}</span>
+        <span class="import-summary-label">Total filas</span>
+      </div>
+      <div class="import-summary-item import-summary-valid">
+        <span class="import-summary-value">${s.validRows}</span>
+        <span class="import-summary-label">V\u00e1lidas</span>
+      </div>
+      <div class="import-summary-item import-summary-warning">
+        <span class="import-summary-value">${s.warningRows}</span>
+        <span class="import-summary-label">Advertencias</span>
+      </div>
+      <div class="import-summary-item import-summary-error">
+        <span class="import-summary-value">${s.invalidRows}</span>
+        <span class="import-summary-label">Errores</span>
+      </div>
+    </div>
+  `;
+
+  if (data.rows && data.rows.length > 0) {
+    const errorRows = data.rows.filter(r => !r.isValid);
+    const warningRows = data.rows.filter(r => r.warnings && r.warnings.length > 0 && r.isValid);
+
+    let errorsHtml = '';
+    if (errorRows.length > 0) {
+      errorsHtml = `<h4 style="margin-bottom:8px;color:var(--danger)">Errores (${errorRows.length})</h4>
+        <div class="table-wrap"><table><thead><tr><th>Fila</th><th>Documento</th><th>Nombre</th><th>Errores</th></tr></thead><tbody>
+        ${errorRows.map(r => `<tr>
+          <td>${r.rowNumber}</td>
+          <td>${escapeHtml(String(r.data?.DOCUMENT_NUMBER || ''))}</td>
+          <td>${escapeHtml(String(r.data?.FIRST_NAME || '') + ' ' + String(r.data?.LAST_NAME || ''))}</td>
+          <td style="color:var(--danger)">${r.errors.map(e => escapeHtml(e.message)).join('<br>')}</td>
+        </tr>`).join('')}
+        </tbody></table></div>`;
+    }
+
+    let warningsHtml = '';
+    if (warningRows.length > 0) {
+      warningsHtml = `<h4 style="margin:16px 0 8px;color:var(--warning)">Advertencias (${warningRows.length})</h4>
+        <div class="table-wrap"><table><thead><tr><th>Fila</th><th>Documento</th><th>Nombre</th><th>Advertencias</th></tr></thead><tbody>
+        ${warningRows.map(r => `<tr>
+          <td>${r.rowNumber}</td>
+          <td>${escapeHtml(String(r.data?.DOCUMENT_NUMBER || ''))}</td>
+          <td>${escapeHtml(String(r.data?.FIRST_NAME || '') + ' ' + String(r.data?.LAST_NAME || ''))}</td>
+          <td style="color:var(--warning)">${r.warnings.map(w => escapeHtml(w.message)).join('<br>')}</td>
+        </tr>`).join('')}
+        </tbody></table></div>`;
+    }
+
+    document.getElementById('importPreviewErrors').innerHTML = errorsHtml + warningsHtml;
+  }
+}
+
+async function executeImportFile() {
+  if (!importState.filePath) { snackbar('Primero valide el archivo', true); return; }
+
+  if (!importState.dryRun) {
+    const ok = confirm('\u00bfEst\u00e1 seguro de ejecutar la importaci\u00f3n?\n\nSe crear\u00e1 un backup autom\u00e1tico antes de proceder.');
+    if (!ok) return;
+  }
+
+  document.getElementById('btnExecuteImport').disabled = true;
+  document.getElementById('btnExecuteImport').textContent = 'Importando...';
+
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/import/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        filePath: importState.filePath,
+        module: importState.module,
+        autoCreateReferences: importState.autoCreateRefs,
+        updateExisting: importState.updateExisting,
+        dryRun: importState.dryRun,
+      }),
+    });
+
+    if (!res.ok) throw { mensaje: 'Error al ejecutar importaci\u00f3n' };
+    const result = await res.json();
+
+    document.getElementById('importResultSection').style.display = '';
+    const s = result.summary;
+    document.getElementById('importResultContent').innerHTML = `
+      <div class="import-summary-grid">
+        <div class="import-summary-item import-summary-valid">
+          <span class="import-summary-value">${s.insertedRows}</span>
+          <span class="import-summary-label">Insertadas</span>
+        </div>
+        <div class="import-summary-item import-summary-valid">
+          <span class="import-summary-value">${s.updatedRows}</span>
+          <span class="import-summary-label">Actualizadas</span>
+        </div>
+        <div class="import-summary-item import-summary-error">
+          <span class="import-summary-value">${s.errorRows}</span>
+          <span class="import-summary-label">Errores</span>
+        </div>
+        <div class="import-summary-item">
+          <span class="import-summary-value">${(s.durationMs / 1000).toFixed(1)}s</span>
+          <span class="import-summary-label">Duraci\u00f3n</span>
+        </div>
+      </div>
+      ${result.importHistoryId ? `<p style="margin-top:12px;font-size:13px;color:var(--text-muted)">ID de importaci\u00f3n: ${result.importHistoryId}</p>` : ''}
+      ${result.summary.errorRows > 0 ? `<button class="btn btn-sm btn-secondary" style="margin-top:12px" onclick="downloadErrorReport(${result.importHistoryId})">Descargar informe de errores</button>` : ''}
+    `;
+
+    snackbar(importState.dryRun ? 'Simulaci\u00f3n completada' : 'Importaci\u00f3n completada');
+    loadImportHistory();
+  } catch (e) {
+    snackbar(e.mensaje || 'Error al importar', true);
+  } finally {
+    document.getElementById('btnExecuteImport').disabled = false;
+    document.getElementById('btnExecuteImport').textContent = 'Ejecutar importaci\u00f3n';
+  }
+}
+
+async function downloadEmployeeTemplate() {
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/import/employees/template`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Error');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'plantilla_empleados.xlsx'; a.click();
+    URL.revokeObjectURL(url);
+    snackbar('Plantilla descargada');
+  } catch (e) { snackbar('Error al descargar plantilla', true); }
+}
+
+async function downloadWorkSessionTemplate() {
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/import/template/work-sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error('Error');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'plantilla_jornadas.xlsx'; a.click();
+    URL.revokeObjectURL(url);
+    snackbar('Plantilla descargada');
+  } catch (e) { snackbar('Error al descargar plantilla', true); }
+}
+
+async function exportEmployeesTemplate() {
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/import/employees/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error('Error');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'exportacion_empleados.xlsx'; a.click();
+    URL.revokeObjectURL(url);
+    snackbar('Empleados exportados');
+  } catch (e) { snackbar('Error al exportar', true); }
+}
+
+let importHistPage = 1;
+async function loadImportHistory(page) {
+  importHistPage = page || 1;
+  try {
+    const data = await get(`/import/history?page=${importHistPage}&limit=10`);
+    const tbody = document.getElementById('importHistoryTbody');
+    if (!data.data || data.data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="11" class="empty">Sin importaciones registradas</td></tr>';
+      return;
+    }
+    const statusLabels = { PENDING: 'Pendiente', PROCESSING: 'Procesando', COMPLETED: 'Completada', FAILED: 'Fallida', ROLLED_BACK: 'Revertida' };
+    const statusClasses = { PENDING: 'badge-info', PROCESSING: 'badge-primary', COMPLETED: 'badge-active', FAILED: 'badge-inactive', ROLLED_BACK: 'badge-warning' };
+    tbody.innerHTML = data.data.map(h => `<tr>
+      <td>${new Date(h.createdAt).toLocaleString('es-CO')}</td>
+      <td>${escapeHtml(h.user?.name || '-')}</td>
+      <td>${escapeHtml(h.filename)}</td>
+      <td>${MODULE_LABELS[h.module] || h.module}</td>
+      <td>${h.durationMs ? (h.durationMs / 1000).toFixed(1) + 's' : '-'}</td>
+      <td>${h.totalRows}</td>
+      <td>${h.insertedRows}</td>
+      <td>${h.updatedRows}</td>
+      <td>${h.errorRows > 0 ? `<span style="color:var(--danger)">${h.errorRows}</span>` : '0'}</td>
+      <td><span class="badge ${statusClasses[h.status] || ''}">${statusLabels[h.status] || h.status}</span></td>
+      <td>
+        ${h.errorRows > 0 ? `<button class="btn btn-sm btn-secondary" onclick="downloadErrorReport(${h.id})">Errores</button>` : ''}
+        ${h.status === 'COMPLETED' && h.backupPath ? `<button class="btn btn-sm btn-danger" onclick="rollbackImport(${h.id})">Revertir</button>` : ''}
+      </td>
+    </tr>`).join('');
+    renderPagination('importHistoryPagination', importHistPage, data.meta.totalPages, loadImportHistory);
+  } catch (e) { snackbar('Error al cargar historial', true); }
+}
+
+async function downloadErrorReport(importId) {
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/import/history/${importId}/error-report`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Error');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `informe_errores_${importId}.xlsx`; a.click();
+    URL.revokeObjectURL(url);
+    snackbar('Informe descargado');
+  } catch (e) { snackbar('Error al descargar informe', true); }
+}
+
+async function rollbackImport(importId) {
+  const ok = confirm('\u00bfEst\u00e1 seguro de revertir esta importaci\u00f3n?\n\nSe restaurar\u00e1 el backup anterior.');
+  if (!ok) return;
+  try {
+    await post('/import/rollback', { importHistoryId: importId });
+    snackbar('Importaci\u00f3n revertida');
+    loadImportHistory();
+  } catch (e) { snackbar(e.mensaje || 'Error al revertir', true); }
 }
 
 /* ------- USUARIOS ------- */

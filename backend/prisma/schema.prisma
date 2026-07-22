@@ -19,6 +19,23 @@ enum EmployeeDocumentType {
   PASAPORTE
 }
 
+enum ContractType {
+  INDEFINIDO
+  TERMINO_FIJO
+  TERMINO_INDEFINIDO
+  OBRA_O_SERVICIO
+  PRACTICAS
+  APRENDIZAJE
+}
+
+enum EmploymentStatus {
+  ACTIVO
+  INACTIVO
+  LICENCIA
+  SUSPENDIDO
+  RETIRADO
+}
+
 enum WorkModality {
   ADMINISTRATIVO
   TERRITORIO
@@ -42,6 +59,7 @@ model User {
   updatedAt                 DateTime       @updatedAt
   auditLogs                 AuditLog[]
   compensatoryDecisions     WorkSession[]  @relation("CompensatoryDecision")
+  importHistories           ImportHistory[]
 
   @@map("usuarios")
 }
@@ -52,10 +70,17 @@ model Employee {
   documentNumber      String                @unique @map("numero_documento")
   firstName           String                @map("nombres")
   lastName            String                @map("apellidos")
+  fullName            String?               @map("nombre_completo")
   email               String?
   phone               String?
   position            String?               @map("cargo")
   area                String?
+  department          String?               @map("departamento")
+  company             String?               @map("empresa")
+  costCenter          String?               @map("centro_costo")
+  employmentStatus    EmploymentStatus      @default(ACTIVO) @map("estado_laboral")
+  contractType        ContractType?         @map("tipo_contrato")
+  hourlyRate          Float?                @map("tarifa_horaria")
   hireDate            DateTime              @default(now()) @map("fecha_ingreso")
   isActive            Boolean               @default(true) @map("activo")
   scheduleId          Int?                  @map("horario_id")
@@ -71,6 +96,9 @@ model Employee {
   @@index([lastName])
   @@index([isActive])
   @@index([area])
+  @@index([department])
+  @@index([company])
+  @@index([documentNumber])
   @@map("empleados")
 }
 
@@ -212,4 +240,72 @@ model BlacklistedToken {
 
   @@index([expiresAt])
   @@map("tokens_revocados")
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  ROLLED_BACK
+}
+
+enum ImportModule {
+  EMPLOYEES
+  WORK_SESSIONS
+  HOLIDAYS
+  USERS
+  COMPANIES
+  DEPARTMENTS
+  POSITIONS
+  COST_CENTERS
+  WORK_CONFIGURATIONS
+}
+
+model ImportHistory {
+  id              Int          @id @default(autoincrement())
+  module          ImportModule @map("modulo")
+  filename        String       @map("archivo_nombre")
+  fileSize        Int?         @map("archivo_tamano")
+  filePath        String?      @map("archivo_ruta")
+  status          ImportStatus @default(PENDING) @map("estado")
+  totalRows       Int          @default(0) @map("total_filas")
+  insertedRows    Int          @default(0) @map("filas_insertadas")
+  updatedRows     Int          @default(0) @map("filas_actualizadas")
+  errorRows       Int          @default(0) @map("filas_con_error")
+  warningRows     Int          @default(0) @map("filas_con_advertencia")
+  durationMs      Int?         @map("duracion_ms")
+  backupPath      String?      @map("ruta_backup")
+  errorReportPath String?      @map("ruta_informe_errores")
+  userId          Int?         @map("usuario_id")
+  user            User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  errors          ImportError[]
+  autoCreateRefs  Boolean      @default(false) @map("auto_crear_referencias")
+  updateExisting  Boolean      @default(true) @map("actualizar_existentes")
+  dryRun          Boolean      @default(false) @map("simulacion")
+  metadata        Json?        @map("metadatos")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([module])
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId])
+  @@map("historial_importaciones")
+}
+
+model ImportError {
+  id              Int            @id @default(autoincrement())
+  importHistoryId Int            @map("historial_id")
+  importHistory   ImportHistory  @relation(fields: [importHistoryId], references: [id], onDelete: Cascade)
+  rowNumber       Int            @map("numero_fila")
+  column          String         @map("columna")
+  errorCode       String         @map("codigo_error")
+  message         String         @map("mensaje")
+  severity        String         @default("error") @map("severidad")
+  rawValue        String?        @map("valor_original")
+  createdAt       DateTime       @default(now())
+
+  @@index([importHistoryId])
+  @@map("errores_importacion")
 }

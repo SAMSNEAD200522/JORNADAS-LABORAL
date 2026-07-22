@@ -13,16 +13,24 @@ import { AuthModule } from './auth/auth.module';
 import { AuditModule } from './audit/audit.module';
 import { WorkConfigModule } from './work-config/work-config.module';
 import { UsersModule } from './users/users.module';
+import { ImportModule } from './import/import.module';
 
 @Module({
   imports: [
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
-    PrismaModule, EmployeesModule, SchedulesModule, WorkSessionsModule, HolidaysModule, ReportsModule, AuthModule, AuditModule, WorkConfigModule, UsersModule,
+    PrismaModule,
+    EmployeesModule,
+    SchedulesModule,
+    WorkSessionsModule,
+    HolidaysModule,
+    ReportsModule,
+    AuthModule,
+    AuditModule,
+    WorkConfigModule,
+    UsersModule,
+    ImportModule,
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
-  ],
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

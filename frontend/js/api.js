@@ -35,3 +35,33 @@ function get(path) { return request('GET', path); }
 function post(path, body) { return request('POST', path, body); }
 function patch(path, body) { return request('PATCH', path, body); }
 function del(path) { return request('DELETE', path); }
+
+async function uploadFile(path, formData) {
+  const token = localStorage.getItem('token');
+  const opts = {
+    method: 'POST',
+    headers: {},
+  };
+  if (token) opts.headers['Authorization'] = `Bearer ${token}`;
+  opts.body = formData;
+
+  const res = await fetch(`${API}${path}`, opts);
+  let data;
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    data = await res.json();
+  } else {
+    const text = await res.text();
+    data = { message: text };
+  }
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      showLogin();
+    }
+    throw { status: res.status, ...data };
+  }
+  return data;
+}
