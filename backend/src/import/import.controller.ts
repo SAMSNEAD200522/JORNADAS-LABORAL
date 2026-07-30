@@ -83,6 +83,20 @@ export class ImportController {
   }
 
   @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA)
+  @Post('template/bd-personas-ep')
+  @ApiOperation({ summary: 'Generar plantilla de formato BD personas EP' })
+  @ApiOkResponse({ description: 'Archivo Excel de plantilla BD personas EP' })
+  generateBdPersonasEpTemplate(@Res() res: Response) {
+    const buffer = this.importService.generateBdPersonasEpTemplate();
+    res.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="plantilla_bd_personas_ep.xlsx"',
+    });
+    res.send(buffer);
+  }
+
+  @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA)
   @Post('template/work-sessions')
   @ApiOperation({ summary: 'Generar plantilla de jornadas laborales' })
   @ApiOkResponse({ description: 'Archivo Excel de plantilla' })
@@ -95,6 +109,19 @@ export class ImportController {
       'Content-Type':
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': 'attachment; filename="plantilla_jornadas.xlsx"',
+    });
+    res.send(buffer);
+  }
+
+  @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA)
+  @Post('template/workdays')
+  @ApiOperation({ summary: 'Generar plantilla de importación masiva de jornadas' })
+  @ApiOkResponse({ description: 'Archivo Excel de plantilla' })
+  generateWorkdayTemplate(@Res() res: Response) {
+    const buffer = this.importService.generateWorkdayTemplate();
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="plantilla_jornadas_masiva.xlsx"',
     });
     res.send(buffer);
   }

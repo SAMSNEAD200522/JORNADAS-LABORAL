@@ -30,7 +30,7 @@ function analyze(startIso: string, endIso: string, label: string, acc: number = 
   console.log(`total=${result.totalMinutes} break=${result.breakMinutes} liquidable=${result.liquidableMinutes}`);
   console.log(`ordDiurno=${result.ordinarioDiurno} ordNocturno=${result.ordinarioNocturno}`);
   console.log(`extraDiurno=${result.extraDiurno} extraNocturno=${result.extraNocturno}`);
-  console.log(`domDiurno=${result.dominicalFestivoDiurno} domNocturno=${result.dominicalFestivoNocturno}`);
+  console.log(`domDiurno=${result.dominicalDiurno} festDiurno=${result.festivoDiurno} domNocturno=${result.dominicalNocturno} festNocturno=${result.festivoNocturno}`);
   console.log(`extraDomDiurno=${result.extraDominicalFestivoDiurno} extraDomNocturno=${result.extraDominicalFestivoNocturno}`);
 }
 

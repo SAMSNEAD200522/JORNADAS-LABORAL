@@ -46,8 +46,10 @@ describe('LaborEngineService', () => {
       result.ordinarioNocturno +
       result.extraDiurno +
       result.extraNocturno +
-      result.dominicalFestivoDiurno +
-      result.dominicalFestivoNocturno +
+      result.dominicalDiurno +
+      result.festivoDiurno +
+      result.dominicalNocturno +
+      result.festivoNocturno +
       result.extraDominicalFestivoDiurno +
       result.extraDominicalFestivoNocturno;
     expect(classified).toBe(result.liquidableMinutes);
@@ -84,7 +86,7 @@ describe('LaborEngineService', () => {
 
   it('2. TERR - jornada nocturna 20:00-05:00 cap=420', () => {
     // 540 presencia, break=60 -> 480 efectivos, cap=420
-    // 480 nocturno: 240(Vie20-24)+240(Sab00-04), daily reset, todo dentro cap
+    // 480 nocturno: 240(Mie20-24)+240(Jue00-04), daily reset, todo dentro cap
     const result = engine.classify({
       startTime: makeDate('2026-07-08T20:00:00'),
       endTime: makeDate('2026-07-09T05:00:00'),
@@ -100,6 +102,7 @@ describe('LaborEngineService', () => {
     expect(result.breakMinutes).toBe(60);
     expect(result.liquidableMinutes).toBe(480);
     expect(result.ordinarioNocturno).toBe(480);
+    expect(result.extraNocturno).toBe(0);
     verifyIntegrity(result, 'Nocturno terr');
   });
 
@@ -141,7 +144,7 @@ describe('LaborEngineService', () => {
     expect(result.totalMinutes).toBe(360);
     expect(result.breakMinutes).toBe(60);
     expect(result.liquidableMinutes).toBe(300);
-    expect(result.dominicalFestivoDiurno).toBe(300);
+    expect(result.dominicalDiurno).toBe(300);
     verifyIntegrity(result, 'Domingo terr');
   });
 
@@ -162,7 +165,7 @@ describe('LaborEngineService', () => {
     expect(result.totalMinutes).toBe(600);
     expect(result.breakMinutes).toBe(60);
     expect(result.liquidableMinutes).toBe(540);
-    expect(result.dominicalFestivoDiurno).toBe(420);
+    expect(result.dominicalDiurno).toBe(420);
     expect(result.extraDominicalFestivoDiurno).toBe(120);
     verifyIntegrity(result, 'Domingo supera cap');
   });
@@ -183,7 +186,7 @@ describe('LaborEngineService', () => {
     expect(result.totalMinutes).toBe(360);
     expect(result.breakMinutes).toBe(60);
     expect(result.liquidableMinutes).toBe(300);
-    expect(result.dominicalFestivoDiurno).toBe(300);
+    expect(result.festivoDiurno).toBe(300);
     verifyIntegrity(result, 'Festivo terr');
   });
 
@@ -205,7 +208,7 @@ describe('LaborEngineService', () => {
     expect(result.totalMinutes).toBe(360);
     expect(result.breakMinutes).toBe(60);
     expect(result.liquidableMinutes).toBe(300);
-    expect(result.dominicalFestivoNocturno).toBe(240);
+    expect(result.dominicalNocturno).toBe(240);
     expect(result.ordinarioNocturno).toBe(60);
     verifyIntegrity(result, 'Domingo nocturno');
   });
@@ -295,6 +298,7 @@ describe('LaborEngineService', () => {
     expect(result.breakMinutes).toBe(60);
     expect(result.liquidableMinutes).toBe(540);
     expect(result.ordinarioNocturno).toBe(540);
+    expect(result.extraNocturno).toBe(0);
     verifyIntegrity(result, 'Cruce semana');
   });
 
@@ -379,7 +383,7 @@ describe('LaborEngineService', () => {
     expect(result.totalMinutes).toBe(360);
     expect(result.breakMinutes).toBe(60);
     expect(result.liquidableMinutes).toBe(300);
-    expect(result.dominicalFestivoDiurno).toBe(120);
+    expect(result.dominicalDiurno).toBe(120);
     expect(result.extraDominicalFestivoDiurno).toBe(180);
     verifyIntegrity(result, 'Domingo limite');
   });
@@ -436,8 +440,8 @@ describe('LaborEngineService', () => {
     expect(result.totalMinutes).toBe(1439);
     expect(result.breakMinutes).toBe(60);
     expect(result.liquidableMinutes).toBe(1379);
-    expect(result.dominicalFestivoNocturno).toBe(360);
-    expect(result.dominicalFestivoDiurno).toBe(60);
+    expect(result.dominicalNocturno).toBe(360);
+    expect(result.dominicalDiurno).toBe(60);
     expect(result.extraDominicalFestivoDiurno).toBe(720);
     expect(result.extraDominicalFestivoNocturno).toBe(239);
     verifyIntegrity(result, 'Domingo completo');
@@ -500,6 +504,7 @@ describe('LaborEngineService', () => {
     expect(result.breakMinutes).toBe(60);
     expect(result.liquidableMinutes).toBe(480);
     expect(result.ordinarioNocturno).toBe(480);
+    expect(result.extraNocturno).toBe(0);
     verifyIntegrity(result, 'Cruce mes');
   });
 
@@ -520,7 +525,7 @@ describe('LaborEngineService', () => {
     expect(result.totalMinutes).toBe(600);
     expect(result.breakMinutes).toBe(60);
     expect(result.liquidableMinutes).toBe(540);
-    expect(result.dominicalFestivoDiurno).toBe(540);
+    expect(result.festivoDiurno).toBe(540);
     expect(result.extraDominicalFestivoDiurno).toBe(0);
     expect(result.ordinarioDiurno).toBe(0);
     verifyIntegrity(result, 'Festivo admin');
@@ -566,7 +571,7 @@ describe('LaborEngineService', () => {
     expect(result.totalMinutes).toBe(480);
     expect(result.breakMinutes).toBe(60);
     expect(result.liquidableMinutes).toBe(420);
-    expect(result.dominicalFestivoNocturno).toBe(120);
+    expect(result.festivoNocturno).toBe(120);
     expect(result.ordinarioNocturno).toBe(300);
     verifyIntegrity(result, 'Festivo cruce');
   });

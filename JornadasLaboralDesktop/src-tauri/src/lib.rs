@@ -6,7 +6,6 @@ mod sidecar;
 mod startup;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
 
@@ -44,7 +43,7 @@ pub fn run() {
             app.manage(startup_result.sidecar_handle.clone());
 
             if let Some(window) = app.get_webview_window("main") {
-                let url = format!("{}/", startup_result.config.backend_url());
+                let url = startup_result.config.backend_url();
                 if let Ok(parsed) = url.parse::<tauri::Url>() {
                     let _ = window.navigate(parsed);
                 }
@@ -71,11 +70,14 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_app_version,
             commands::get_system_info,
+            commands::append_frontend_log,
             commands::create_backup,
             commands::open_in_explorer,
             commands::open_file_dialog,
             commands::save_file_dialog,
             commands::open_directory_dialog,
+            commands::save_download_file,
+            commands::save_download_file_post,
             import_engine::import_file,
             import_engine::preview_import,
             import_engine::get_import_history,

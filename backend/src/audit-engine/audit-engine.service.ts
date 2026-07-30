@@ -115,6 +115,7 @@ export class AuditEngineService {
       const bucketName = this.classifyMinuteToBucket(
         output,
         isRestDay,
+        isHoliday,
         isNight,
         isOrdinary,
       );
@@ -175,25 +176,46 @@ export class AuditEngineService {
   private classifyMinuteToBucket(
     output: EngineOutput,
     isRestDay: boolean,
+    isHoliday: boolean,
     isNight: boolean,
     isOrdinary: boolean,
   ): string {
     if (isRestDay) {
-      if (isOrdinary) {
-        if (isNight) {
-          output.dominicalFestivoNocturno++;
-          return 'dominicalFestivoNocturno';
+      if (isHoliday) {
+        if (isOrdinary) {
+          if (isNight) {
+            output.festivoNocturno++;
+            return 'festivoNocturno';
+          } else {
+            output.festivoDiurno++;
+            return 'festivoDiurno';
+          }
         } else {
-          output.dominicalFestivoDiurno++;
-          return 'dominicalFestivoDiurno';
+          if (isNight) {
+            output.extraDominicalFestivoNocturno++;
+            return 'extraDominicalFestivoNocturno';
+          } else {
+            output.extraDominicalFestivoDiurno++;
+            return 'extraDominicalFestivoDiurno';
+          }
         }
       } else {
-        if (isNight) {
-          output.extraDominicalFestivoNocturno++;
-          return 'extraDominicalFestivoNocturno';
+        if (isOrdinary) {
+          if (isNight) {
+            output.dominicalNocturno++;
+            return 'dominicalNocturno';
+          } else {
+            output.dominicalDiurno++;
+            return 'dominicalDiurno';
+          }
         } else {
-          output.extraDominicalFestivoDiurno++;
-          return 'extraDominicalFestivoDiurno';
+          if (isNight) {
+            output.extraDominicalFestivoNocturno++;
+            return 'extraDominicalFestivoNocturno';
+          } else {
+            output.extraDominicalFestivoDiurno++;
+            return 'extraDominicalFestivoDiurno';
+          }
         }
       }
     } else {
@@ -337,28 +359,42 @@ export class AuditEngineService {
           'Hora extra en horario nocturno (no acumula con recargo nocturno 35%)',
       },
       {
-        name: 'Dominical/Festivo diurno',
-        key: 'dominicalFestivoDiurno',
-        value: output.dominicalFestivoDiurno,
+        name: 'Dominical diurno',
+        key: 'dominicalDiurno',
+        value: output.dominicalDiurno,
+        legalBase: 'Art. 179 CST',
+        description: 'Trabajo ordinario en domingo, horario diurno',
+      },
+      {
+        name: 'Festivo diurno',
+        key: 'festivoDiurno',
+        value: output.festivoDiurno,
         legalBase: 'Art. 179 + Ley 2466 Art. 14',
-        description: 'Trabajo ordinario en domingo/festivo, horario diurno',
+        description: 'Trabajo ordinario en festivo, horario diurno',
       },
       {
-        name: 'Dominical/Festivo nocturno',
-        key: 'dominicalFestivoNocturno',
-        value: output.dominicalFestivoNocturno,
+        name: 'Dominical nocturno',
+        key: 'dominicalNocturno',
+        value: output.dominicalNocturno,
+        legalBase: 'Art. 179 + 168.1 CST',
+        description: 'Trabajo ordinario en domingo, horario nocturno',
+      },
+      {
+        name: 'Festivo nocturno',
+        key: 'festivoNocturno',
+        value: output.festivoNocturno,
         legalBase: 'Art. 179 + 168.1 + Ley 2466',
-        description: 'Trabajo ordinario en domingo/festivo, horario nocturno',
+        description: 'Trabajo ordinario en festivo, horario nocturno',
       },
       {
-        name: 'Extra Dominical/Festivo diurno',
+        name: 'Extra dominical/festivo diurno',
         key: 'extraDominicalFestivoDiurno',
         value: output.extraDominicalFestivoDiurno,
         legalBase: 'Art. 179 + 168.2 + Ley 2466',
         description: 'Hora extra en domingo/festivo, horario diurno',
       },
       {
-        name: 'Extra Dominical/Festivo nocturno',
+        name: 'Extra dominical/festivo nocturno',
         key: 'extraDominicalFestivoNocturno',
         value: output.extraDominicalFestivoNocturno,
         legalBase: 'Art. 179 + 168.3 + Ley 2466',
@@ -412,8 +448,10 @@ export class AuditEngineService {
       output.ordinarioNocturno +
       output.extraDiurno +
       output.extraNocturno +
-      output.dominicalFestivoDiurno +
-      output.dominicalFestivoNocturno +
+      output.dominicalDiurno +
+      output.festivoDiurno +
+      output.dominicalNocturno +
+      output.festivoNocturno +
       output.extraDominicalFestivoDiurno +
       output.extraDominicalFestivoNocturno;
 
@@ -482,8 +520,10 @@ export class AuditEngineService {
       ordinarioNocturno: 0,
       extraDiurno: 0,
       extraNocturno: 0,
-      dominicalFestivoDiurno: 0,
-      dominicalFestivoNocturno: 0,
+      dominicalDiurno: 0,
+      festivoDiurno: 0,
+      dominicalNocturno: 0,
+      festivoNocturno: 0,
       extraDominicalFestivoDiurno: 0,
       extraDominicalFestivoNocturno: 0,
     };

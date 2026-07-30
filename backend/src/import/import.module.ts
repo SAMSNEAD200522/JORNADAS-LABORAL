@@ -3,9 +3,10 @@ import { ImportController } from './import.controller';
 import { ImportService } from './import.service';
 import { EmployeesModule } from '../employees/employees.module';
 import { AuditModule } from '../audit/audit.module';
+import { LaborEngineModule } from '../labor-engine/labor-engine.module';
 
 @Module({
-  imports: [EmployeesModule, AuditModule],
+  imports: [EmployeesModule, AuditModule, LaborEngineModule],
   controllers: [ImportController],
   providers: [ImportService],
   exports: [ImportService],

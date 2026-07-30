@@ -1,3 +1,4 @@
+use log::info;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -47,6 +48,8 @@ pub struct AppConfig {
     pub logs_dir: PathBuf,
     pub temp_dir: PathBuf,
     pub backend_dir: PathBuf,
+    pub frontend_dir: PathBuf,
+    pub node_dir: PathBuf,
     pub port: u16,
     pub frontend_version: String,
     pub backend_version: String,
@@ -59,7 +62,16 @@ impl AppConfig {
         );
 
         let app_data_dir = Self::resolve_app_data_dir()?;
-        let backend_dir = Self::resolve_backend_dir(&app_data_dir)?;
+        let exe_dir = Self::exe_dir();
+
+        let resources_bundle = exe_dir.join("bundle");
+
+        let backend_dir =
+            Self::resolve_backend_dir(&app_data_dir, &exe_dir, &resources_bundle)?;
+        let frontend_dir =
+            Self::resolve_frontend_dir(&app_data_dir, &exe_dir, &resources_bundle, &backend_dir)?;
+        let node_dir =
+            Self::resolve_node_dir(&exe_dir, &resources_bundle, &backend_dir);
 
         let db_dir = app_data_dir.join("data");
         let backup_dir = app_data_dir.join("backups");
@@ -98,10 +110,19 @@ impl AppConfig {
             logs_dir,
             temp_dir,
             backend_dir,
+            frontend_dir,
+            node_dir,
             port,
             frontend_version: env!("CARGO_PKG_VERSION").to_string(),
             backend_version: String::new(),
         })
+    }
+
+    fn exe_dir() -> PathBuf {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_default()
     }
 
     fn resolve_app_data_dir() -> Result<PathBuf, String> {
@@ -114,45 +135,109 @@ impl AppConfig {
         Ok(base.join("JornadasLaboralDesktop"))
     }
 
-    fn resolve_backend_dir(app_data_dir: &PathBuf) -> Result<PathBuf, String> {
-        let exe_dir = std::env::current_exe()
-            .map_err(|e| format!("Cannot determine exe directory: {}", e))?
-            .parent()
-            .ok_or("Cannot determine exe parent directory")?
-            .to_path_buf();
-
-        let mut candidates: Vec<PathBuf> = vec![
-            exe_dir.join("backend"),
-            app_data_dir.join("backend"),
+    fn resolve_backend_dir(
+        app_data_dir: &PathBuf,
+        exe_dir: &PathBuf,
+        resources_bundle: &PathBuf,
+    ) -> Result<PathBuf, String> {
+        let candidates: Vec<(PathBuf, &str)> = vec![
+            (resources_bundle.join("backend"), "bundled resources"),
+            (exe_dir.join("backend"), "exe dir sibling"),
+            (app_data_dir.join("backend"), "app data dir"),
         ];
 
-        // Walk up from exe_dir to find the project root containing backend/
+        for (candidate, label) in &candidates {
+            if candidate.join("dist").join("src").join("main.js").exists() {
+                info!("Backend found at {} ({})", candidate.display(), label);
+                return Ok(candidate.clone());
+            }
+            if candidate.join("dist").join("main.js").exists() {
+                info!("Backend found at {} ({})", candidate.display(), label);
+                return Ok(candidate.clone());
+            }
+        }
+
         let mut ancestor = exe_dir.clone();
         for _ in 0..8 {
             if let Some(parent) = ancestor.parent() {
                 ancestor = parent.to_path_buf();
                 let candidate = ancestor.join("backend");
-                if !candidates.contains(&candidate) {
-                    candidates.push(candidate);
+                if candidate.join("dist").join("src").join("main.js").exists()
+                    || candidate.join("dist").join("main.js").exists()
+                {
+                    info!("Backend found at {} (ancestor walk)", candidate.display());
+                    return Ok(candidate);
                 }
             } else {
                 break;
             }
         }
 
-        for candidate in &candidates {
-            if candidate.join("dist").join("src").join("main.js").exists() {
-                return Ok(candidate.clone());
-            }
-            if candidate.join("dist").join("main.js").exists() {
-                return Ok(candidate.clone());
-            }
-            if candidate.join("package.json").exists() {
-                return Ok(candidate.clone());
+        Err(format!(
+            "Backend not found. Searched: resources bundle, exe dir, app data, ancestors of {}",
+            exe_dir.display()
+        ))
+    }
+
+    fn resolve_frontend_dir(
+        app_data_dir: &PathBuf,
+        exe_dir: &PathBuf,
+        resources_bundle: &PathBuf,
+        backend_dir: &PathBuf,
+    ) -> Result<PathBuf, String> {
+        let target = app_data_dir.join("frontend");
+
+        if target.join("index.html").exists() {
+            info!("Frontend found at AppData: {}", target.display());
+            return Ok(target);
+        }
+
+        let candidates: Vec<(PathBuf, &str)> = vec![
+            (resources_bundle.join("frontend"), "bundled resources"),
+            (exe_dir.join("frontend"), "exe dir sibling"),
+            (backend_dir.join("..").join("frontend"), "backend sibling"),
+        ];
+
+        for (candidate, label) in &candidates {
+            if candidate.join("index.html").exists() {
+                info!(
+                    "Frontend found at {} ({}), copying to AppData",
+                    candidate.display(),
+                    label
+                );
+                let _ = std::fs::create_dir_all(&target);
+                copy_dir_recursive(candidate, &target).map_err(|e| {
+                    format!("Failed to copy frontend to {}: {}", target.display(), e)
+                })?;
+                return Ok(target);
             }
         }
 
-        Ok(exe_dir.join("backend"))
+        let _ = std::fs::create_dir_all(&target);
+        info!("Frontend target created (empty): {}", target.display());
+        Ok(target)
+    }
+
+    fn resolve_node_dir(
+        exe_dir: &PathBuf,
+        resources_bundle: &PathBuf,
+        backend_dir: &PathBuf,
+    ) -> PathBuf {
+        let candidates: Vec<PathBuf> = vec![
+            resources_bundle.join("node"),
+            exe_dir.join("node"),
+            backend_dir.join("node"),
+        ];
+
+        for candidate in &candidates {
+            if candidate.join("node.exe").exists() {
+                info!("Node.js found at {}", candidate.display());
+                return candidate.clone();
+            }
+        }
+
+        info!("Bundled Node.js not found, will use system PATH");
+        PathBuf::new()
     }
 
     pub fn database_url(&self) -> String {
@@ -170,4 +255,19 @@ impl AppConfig {
     pub fn health_url(&self) -> String {
         format!("http://localhost:{}/api/v1/health", self.port)
     }
+}
+
+fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let dst_path = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_recursive(&entry.path(), &dst_path)?;
+        } else {
+            std::fs::copy(entry.path(), &dst_path)?;
+        }
+    }
+    Ok(())
 }

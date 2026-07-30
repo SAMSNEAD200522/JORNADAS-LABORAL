@@ -50,6 +50,9 @@ describe('ReportsService', () => {
             extraNightMinutes: 0,
             sundayMinutes: 0,
             holidayMinutes: 0,
+            extraHolidayDayMinutes: 0,
+            extraHolidayNightMinutes: 0,
+            sundayNightSurchargeMinutes: 0,
           },
           _count: { id: 5 },
         },
@@ -58,7 +61,7 @@ describe('ReportsService', () => {
       const result = await service.getWeeklySummary({ year: 2026, week: 28 });
 
       expect(result.periodo).toContain('Semana 28');
-      expect(result.totalHoras).toBe(20);
+      expect(result.totalHoras).toBe(18.33);
       expect(result.totalJornadas).toBe(5);
       expect(result.data).toHaveLength(1);
       expect(result.data[0].employee.firstName).toBe('Carlos');
@@ -98,6 +101,9 @@ describe('ReportsService', () => {
             extraNightMinutes: 0,
             sundayMinutes: 0,
             holidayMinutes: 0,
+            extraHolidayDayMinutes: 0,
+            extraHolidayNightMinutes: 0,
+            sundayNightSurchargeMinutes: 0,
           },
           _count: { id: 20 },
         },
@@ -106,7 +112,7 @@ describe('ReportsService', () => {
       const result = await service.getMonthlySummary({ year: 2026, month: 7 });
 
       expect(result.periodo).toBe('Jul 2026');
-      expect(result.totalHoras).toBe(80);
+      expect(result.totalHoras).toBe(73.33);
       expect(result.data).toHaveLength(1);
     });
   });
@@ -133,6 +139,9 @@ describe('ReportsService', () => {
             extraNightMinutes: 0,
             sundayMinutes: 0,
             holidayMinutes: 0,
+            extraHolidayDayMinutes: 0,
+            extraHolidayNightMinutes: 0,
+            sundayNightSurchargeMinutes: 0,
           },
           _count: { id: 1 },
         },

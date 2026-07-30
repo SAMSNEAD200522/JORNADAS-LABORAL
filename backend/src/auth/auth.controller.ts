@@ -8,6 +8,8 @@ import {
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { Public } from './decorators/public.decorator';
+import { Roles } from './decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @ApiTags('Autenticación')
 @Controller('auth')
@@ -33,6 +35,7 @@ export class AuthController {
   }
 
   @ApiBearerAuth()
+  @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA, Role.SUPERVISOR)
   @Post('logout')
   @ApiOperation({ summary: 'Cerrar sesión y revocar token actual' })
   @ApiOkResponse({ description: 'Sesión cerrada' })

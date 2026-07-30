@@ -30,12 +30,14 @@ export class SchedulesController {
   }
 
   @Get()
+  @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA, Role.SUPERVISOR)
   @ApiOperation({ summary: 'Listar todos los horarios' })
   findAll() {
     return this.schedulesService.findAll();
   }
 
   @Get(':id')
+  @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA, Role.SUPERVISOR)
   @ApiOperation({ summary: 'Obtener un horario por ID' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.schedulesService.findOne(id);
@@ -89,6 +91,7 @@ export class SchedulesController {
   }
 
   @Get(':scheduleId/dias')
+  @Roles(Role.ADMINISTRADOR, Role.GESTION_HUMANA, Role.SUPERVISOR)
   @ApiOperation({ summary: 'Listar días configurados para un horario' })
   findDays(@Param('scheduleId', ParseIntPipe) scheduleId: number) {
     return this.schedulesService.findDays(scheduleId);

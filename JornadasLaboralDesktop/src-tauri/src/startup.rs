@@ -16,7 +16,10 @@ pub struct StartupResult {
 pub fn run_startup(_app_handle: tauri::AppHandle) -> Result<StartupResult, String> {
     info!("=== Application Startup ===");
 
-    info!("[1/8] Initializing configuration...");
+    info!("[1/8] Killing stale backend processes...");
+    sidecar::kill_stale_backend_processes();
+
+    info!("[2/8] Initializing configuration...");
     let config = AppConfig::initialize()?;
     info!(
         "  Profile: {:?}, Port: {}, AppData: {}",
@@ -24,21 +27,24 @@ pub fn run_startup(_app_handle: tauri::AppHandle) -> Result<StartupResult, Strin
         config.port,
         config.app_data_dir.display()
     );
+    info!(
+        "  Backend: {}, Frontend: {}, Node: {}",
+        config.backend_dir.display(),
+        config.frontend_dir.display(),
+        config.node_dir.display()
+    );
 
-    info!("[2/8] Initializing logging...");
+    info!("[3/8] Initializing logging...");
     initialize_logging(&config)?;
 
-    info!("[3/8] Creating startup backup...");
+    info!("[4/8] Creating startup backup...");
     create_startup_backup(&config)?;
 
-    info!("[4/8] Verifying and seeding database...");
+    info!("[5/8] Verifying and seeding database...");
     verify_and_seed_database(&config)?;
 
-    info!("[5/8] Ensuring Prisma client is generated...");
-    sidecar::ensure_prisma_client(&config.backend_dir)?;
-
-    info!("[6/8] Running Prisma migrations...");
-    sidecar::run_prisma_migrate_deploy(&config.backend_dir, &config.database_url())?;
+    info!("[6/8] Verifying Prisma client exists...");
+    verify_prisma_client(&config.backend_dir)?;
 
     info!("[7/8] Starting NestJS sidecar...");
     let sidecar = Arc::new(sidecar::SidecarManager::new(config.clone()));
@@ -182,6 +188,25 @@ fn seed_database_from_template(config: &AppConfig) -> Result<(), String> {
     }
 
     info!("  No template database found, database will be created by Prisma");
+    Ok(())
+}
+
+fn verify_prisma_client(backend_dir: &Path) -> Result<(), String> {
+    let client_dir = backend_dir.join("node_modules").join(".prisma").join("client");
+    if !client_dir.exists() {
+        return Err(format!(
+            "Prisma client not found at {}. Run 'npx prisma generate' in the backend directory before building.",
+            client_dir.display()
+        ));
+    }
+    let main_js = client_dir.join("index.js");
+    if !main_js.exists() {
+        return Err(format!(
+            "Prisma client index.js not found at {}. Run 'npx prisma generate' in the backend directory before building.",
+            main_js.display()
+        ));
+    }
+    info!("  Prisma client verified at {}", client_dir.display());
     Ok(())
 }
 

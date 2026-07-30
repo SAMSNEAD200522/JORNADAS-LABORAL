@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
@@ -26,6 +27,22 @@ pub fn get_system_info(config: tauri::State<AppConfig>) -> SystemInfo {
             .unwrap_or(0),
         backup_count: count_backups(&config.backup_dir),
     }
+}
+
+#[tauri::command]
+pub fn append_frontend_log(
+    config: tauri::State<AppConfig>,
+    message: String,
+) -> Result<(), String> {
+    let log_path = config.logs_dir.join("frontend.log");
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|e| format!("Failed to open frontend.log: {}", e))?;
+    writeln!(file, "{}", message)
+        .map_err(|e| format!("Failed to write to frontend.log: {}", e))?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -146,6 +163,108 @@ pub async fn open_directory_dialog(app: AppHandle) -> Result<Option<String>, Str
         .map(|p| p.to_string());
 
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn save_download_file(
+    app: AppHandle,
+    url: String,
+    token: String,
+    default_name: String,
+) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch file: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Server returned {}", response.status()));
+    }
+
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    let save_path = {
+        let mut builder = app.dialog().file();
+        builder = builder.set_file_name(&default_name);
+        if content_type.contains("spreadsheet") || content_type.contains("excel") {
+            builder = builder.add_filter("Excel files", &["xlsx"]);
+        }
+        builder = builder.add_filter("All files", &["*"]);
+        builder.blocking_save_file()
+    };
+
+    let file_path = save_path.ok_or("Save cancelled by user")?;
+    let path_str = file_path.to_string();
+    let path_buf = std::path::PathBuf::from(&path_str);
+
+    std::fs::write(&path_buf, &bytes).map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(path_str)
+}
+
+#[tauri::command]
+pub async fn save_download_file_post(
+    app: AppHandle,
+    url: String,
+    token: String,
+    default_name: String,
+) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", "application/json")
+        .body("{}".to_string())
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch file: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Server returned {}", response.status()));
+    }
+
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    let save_path = {
+        let mut builder = app.dialog().file();
+        builder = builder.set_file_name(&default_name);
+        if content_type.contains("spreadsheet") || content_type.contains("excel") {
+            builder = builder.add_filter("Excel files", &["xlsx"]);
+        }
+        builder = builder.add_filter("All files", &["*"]);
+        builder.blocking_save_file()
+    };
+
+    let file_path = save_path.ok_or("Save cancelled by user")?;
+    let path_str = file_path.to_string();
+    let path_buf = std::path::PathBuf::from(&path_str);
+
+    std::fs::write(&path_buf, &bytes).map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(path_str)
 }
 
 #[derive(Debug, serde::Deserialize)]

@@ -100,7 +100,7 @@ describe('AuditEngineService', () => {
     expect(result.extraDiurno).toBe(180);
     expect(result.ordinarioNocturno).toBe(0);
     expect(result.extraNocturno).toBe(0);
-    expect(result.dominicalFestivoDiurno).toBe(0);
+    expect(result.dominicalDiurno).toBe(0);
 
     expect(trace.legalClassification.invariants.equalsLiquidable).toBe(true);
   });
@@ -164,7 +164,7 @@ describe('AuditEngineService', () => {
       configName: 'Test',
     });
 
-    expect(trace.finalResult.dominicalFestivoDiurno).toBe(480);
+    expect(trace.finalResult.dominicalDiurno).toBe(480);
     expect(trace.finalResult.extraDominicalFestivoDiurno).toBe(60);
     expect(trace.timeline[0].isSunday).toBe(true);
     expect(trace.timeline[0].isRestDay).toBe(true);
@@ -184,7 +184,7 @@ describe('AuditEngineService', () => {
       configName: 'Test',
     });
 
-    expect(trace.finalResult.dominicalFestivoDiurno).toBe(360);
+    expect(trace.finalResult.festivoDiurno).toBe(360);
     expect(trace.finalResult.extraDominicalFestivoDiurno).toBe(60);
     expect(trace.timeline[0].isHoliday).toBe(true);
     expect(trace.timeline[0].isRestDay).toBe(true);

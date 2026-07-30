@@ -54,8 +54,10 @@ export const BUCKET_PERCENTAGES = {
   ordinarioNocturno: 1.35, // 100% + 35%
   extraDiurno: 1.25, // 100% + 25%
   extraNocturno: 1.75, // 100% + 75%
-  dominicalFestivoDiurno: 1.9, // 100% + 90%
-  dominicalFestivoNocturno: 2.25, // 100% + 90% + 35%
+  dominicalDiurno: 1.9, // 100% + 90%
+  festivoDiurno: 1.9, // 100% + 90%
+  dominicalNocturno: 2.25, // 100% + 90% + 35%
+  festivoNocturno: 2.25, // 100% + 90% + 35%
   extraDominicalFestivoDiurno: 2.15, // 100% + 90% + 25%
   extraDominicalFestivoNocturno: 2.65, // 100% + 90% + 75%
 } as const;

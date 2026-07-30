@@ -161,7 +161,7 @@ model OrdinaryDistribution {
 
 model GlobalConfig {
   id                  Int      @id @default(autoincrement())
-  nightStart          String   @default("21:00") @map("inicio_nocturno")
+  nightStart          String   @default("19:00") @map("inicio_nocturno")
   nightEnd            String   @default("06:00") @map("fin_nocturno")
   defaultBreakMinutes Int      @default(60) @map("descanso_por_defecto")
   createdAt           DateTime @default(now())
@@ -253,6 +253,7 @@ enum ImportStatus {
 enum ImportModule {
   EMPLOYEES
   WORK_SESSIONS
+  WORKDAYS
   HOLIDAYS
   USERS
   COMPANIES

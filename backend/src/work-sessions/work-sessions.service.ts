@@ -31,11 +31,11 @@ export class WorkSessionsService {
       nightSurchargeMinutes: c.ordinarioNocturno,
       extraDayMinutes: c.extraDiurno,
       extraNightMinutes: c.extraNocturno,
-      sundayMinutes: c.dominicalFestivoDiurno,
-      holidayMinutes: 0,
+      sundayMinutes: c.dominicalDiurno + c.dominicalNocturno,
+      holidayMinutes: c.festivoDiurno + c.festivoNocturno,
       extraHolidayDayMinutes: c.extraDominicalFestivoDiurno,
       extraHolidayNightMinutes: c.extraDominicalFestivoNocturno,
-      sundayNightSurchargeMinutes: c.dominicalFestivoNocturno,
+      sundayNightSurchargeMinutes: c.dominicalNocturno + c.festivoNocturno,
     };
   }
 
@@ -220,6 +220,14 @@ export class WorkSessionsService {
       ? new Date(dto.startTime)
       : session.startTime;
     const endTime = dto.endTime ? new Date(dto.endTime) : session.endTime;
+
+    if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: 'Las fechas proporcionadas no son válidas',
+        code: 'FECHAS_INVALIDAS',
+      });
+    }
 
     if (endTime <= startTime) {
       throw new BadRequestException({

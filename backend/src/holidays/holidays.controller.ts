@@ -6,8 +6,9 @@ import {
   Param,
   Body,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { HolidaysService } from './holidays.service';
 import { CreateHolidayDto } from './dto/create-holiday.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -38,6 +39,16 @@ export class HolidaysController {
   @ApiOperation({ summary: 'Obtener un festivo por ID' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.holidaysService.findOne(id);
+  }
+
+  @Post('generar/:year')
+  @Roles(Role.ADMINISTRADOR)
+  @ApiOperation({ summary: 'Generar calendario de festivos colombianos para un año' })
+  generateCalendar(
+    @Param('year', ParseIntPipe) year: number,
+    @CurrentUser('id') userId?: number,
+  ) {
+    return this.holidaysService.generateColombianCalendar(year, userId);
   }
 
   @Delete(':id')

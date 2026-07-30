@@ -5,6 +5,7 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { globalValidationPipe } from './common/pipes/validation.pipe';
 import { config } from './config/env';
 import { resolve } from 'path';
+import * as fs from 'fs';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -50,7 +51,25 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.useStaticAssets(resolve(process.cwd(), '..', 'frontend'));
+  const frontendDir = process.env.FRONTEND_DIR;
+  if (frontendDir && fs.existsSync(frontendDir)) {
+    app.useStaticAssets(frontendDir);
+    console.log(`Serving frontend from FRONTEND_DIR: ${frontendDir}`);
+  } else {
+    const backendRoot = resolve(__dirname, '..', '..');
+    const frontendCandidates = [
+      resolve(backendRoot, '..', 'frontend'),
+      resolve(backendRoot, 'frontend'),
+    ];
+
+    for (const candidate of frontendCandidates) {
+      if (fs.existsSync(candidate)) {
+        app.useStaticAssets(candidate);
+        console.log(`Serving frontend from: ${candidate}`);
+        break;
+      }
+    }
+  }
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Control y Gestión de Jornadas Laborales')

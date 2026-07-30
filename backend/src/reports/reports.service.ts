@@ -144,7 +144,10 @@ export class ReportsService {
       })
       .filter((d): d is NonNullable<typeof d> => d !== null);
 
-    const totalHoras = data.reduce((s, d) => s + d.totalMinutes, 0) / 60;
+    const totalHoras = data.reduce((s, d) =>
+      s + d.ordinaryMinutes + d.extraDayMinutes + d.extraNightMinutes +
+      d.sundayMinutes + d.holidayMinutes + d.extraHolidayDayMinutes +
+      d.extraHolidayNightMinutes, 0) / 60;
     const totalJornadas = data.reduce((s, d) => s + d.totalSessions, 0);
 
     return {

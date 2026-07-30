@@ -6,15 +6,13 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { LaborEngineService } from '../labor-engine/labor-engine.service';
 import { PreviewImportDto } from './dto/preview-import.dto';
 import { ExecuteImportDto } from './dto/execute-import.dto';
 import {
   Prisma,
   ImportModule,
   ImportStatus,
-  EmployeeDocumentType,
-  EmploymentStatus,
-  ContractType,
 } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import * as fs from 'fs';
@@ -61,23 +59,25 @@ export interface ImportResult {
 }
 
 const EMPLOYEE_TEMPLATE_HEADERS = [
-  'DOCUMENT_TYPE',
-  'DOCUMENT_NUMBER',
-  'FIRST_NAME',
-  'LAST_NAME',
-  'FULL_NAME',
-  'POSITION',
-  'DEPARTMENT',
-  'COMPANY',
-  'COST_CENTER',
-  'EMAIL',
-  'PHONE',
-  'EMPLOYMENT_STATUS',
-  'HIRE_DATE',
-  'HOURLY_RATE',
-  'CONTRACT_TYPE',
-  'WORK_SCHEDULE',
+  'Postulado_nombre',
+  'Cargo',
+  'Documento',
+  'Contacto',
 ];
+
+export function parseColombianName(fullName: string): { firstName: string; lastName: string } {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const n = parts.length;
+  if (n === 0) return { firstName: '', lastName: '' };
+  if (n === 1) return { firstName: parts[0], lastName: '' };
+  if (n === 2) return { firstName: parts[0], lastName: parts[1] };
+  if (n === 3) return { firstName: parts[0], lastName: `${parts[1]} ${parts[2]}` };
+  const splitPoint = Math.ceil(n / 2);
+  return {
+    firstName: parts.slice(0, splitPoint).join(' '),
+    lastName: parts.slice(splitPoint).join(' '),
+  };
+}
 
 const WORK_SESSION_TEMPLATE_HEADERS = [
   'FECHA',
@@ -95,28 +95,26 @@ const WORK_SESSION_TEMPLATE_HEADERS = [
   '014-LUNES FESTIVO',
 ];
 
-const VALID_DOCUMENT_TYPES = ['CC', 'CE', 'PASAPORTE'];
-const VALID_EMPLOYMENT_STATUSES = [
-  'ACTIVO',
-  'INACTIVO',
-  'LICENCIA',
-  'SUSPENDIDO',
-  'RETIRADO',
+const WORKDAY_RAW_TEMPLATE_HEADERS = [
+  'CEDULA EMPLEADO',
+  'FECHA INICIO',
+  'HORA INICIO',
+  'FECHA FIN',
+  'HORA FIN',
 ];
-const VALID_CONTRACT_TYPES = [
-  'INDEFINIDO',
-  'TERMINO_FIJO',
-  'TERMINO_INDEFINIDO',
-  'OBRA_O_SERVICIO',
-  'PRACTICAS',
-  'APRENDIZAJE',
-];
+
+const ALLOWED_IMPORT_MIME_TYPES_BY_EXTENSION: Record<string, string[]> = {
+  '.xlsx': ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  '.xls': ['application/vnd.ms-excel'],
+};
+
 
 @Injectable()
 export class ImportService {
   constructor(
     private prisma: PrismaService,
     private audit: AuditService,
+    private engine: LaborEngineService,
   ) {}
 
   handleFileUpload(file: {
@@ -125,6 +123,25 @@ export class ImportService {
     size: number;
     mimetype: string;
   }) {
+    const extension = path.extname(file.originalname ?? '').toLowerCase();
+    const allowedMimeTypes = ALLOWED_IMPORT_MIME_TYPES_BY_EXTENSION[extension];
+
+    if (!allowedMimeTypes) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: 'La extensión del archivo no está permitida. Use .xlsx o .xls',
+        code: 'EXTENSION_ARCHIVO_INVALIDA',
+      });
+    }
+
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: 'El tipo MIME del archivo no corresponde a un archivo Excel permitido',
+        code: 'TIPO_MIME_INVALIDO',
+      });
+    }
+
     const uploadDir = path.join(process.cwd(), 'uploads', 'imports');
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
@@ -156,7 +173,35 @@ export class ImportService {
       });
     }
     const sheet = workbook.Sheets[sheetName];
-    return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const rawRows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: '' });
+    return this.mapColumnsToStandard(rawRows);
+  }
+
+  private detectFormat(headers: string[]): 'bd_personas_ep' | 'standard' {
+    const lower = headers.map((h) => h.trim().toLowerCase());
+    if (lower.includes('postulado_nombre_depurado')) {
+      return 'bd_personas_ep';
+    }
+    return 'standard';
+  }
+
+  private mapColumnsToStandard(rows: Record<string, string>[]): Record<string, string>[] {
+    if (rows.length === 0) return rows;
+
+    const firstRow = rows[0];
+    const headers = Object.keys(firstRow);
+    const format = this.detectFormat(headers);
+
+    if (format === 'standard') return rows;
+
+    return rows.map((row) => {
+      const mapped: Record<string, string> = {};
+      mapped['Postulado_nombre'] = String(row['Postulado_nombre_depurado'] ?? row['postulado_nombre_depurado'] ?? '').trim();
+      mapped['Cargo'] = String(row['Cargo'] ?? row['cargo'] ?? '').trim();
+      mapped['Documento'] = String(row['Documento'] ?? row['documento'] ?? '').trim();
+      mapped['Contacto'] = String(row['Contacto'] ?? row['contacto'] ?? '').trim();
+      return mapped;
+    });
   }
 
   private validateEmployeeRow(
@@ -167,137 +212,61 @@ export class ImportService {
     const errors: ValidationError[] = [];
     const warnings: ValidationError[] = [];
 
-    const docType = String(row['DOCUMENT_TYPE'] ?? '').trim();
-    if (!docType) {
+    const nombre = String(row['Postulado_nombre'] ?? '').trim();
+    if (!nombre) {
       errors.push({
-        column: 'DOCUMENT_TYPE',
+        column: 'Postulado_nombre',
         errorCode: 'CAMPO_REQUERIDO',
-        message: 'El tipo de documento es obligatorio',
+        message: 'El nombre del postulado es obligatorio',
         severity: 'error',
-      });
-    } else if (!VALID_DOCUMENT_TYPES.includes(docType)) {
-      errors.push({
-        column: 'DOCUMENT_TYPE',
-        errorCode: 'VALOR_INVALIDO',
-        message: `Tipo de documento inválido. Valores permitidos: ${VALID_DOCUMENT_TYPES.join(', ')}`,
-        severity: 'error',
-        rawValue: docType,
       });
     }
 
-    const docNumber = String(row['DOCUMENT_NUMBER'] ?? '').trim();
-    if (!docNumber) {
+    const cargo = String(row['Cargo'] ?? '').trim();
+    if (!cargo) {
       errors.push({
-        column: 'DOCUMENT_NUMBER',
+        column: 'Cargo',
+        errorCode: 'CAMPO_REQUERIDO',
+        message: 'El cargo es obligatorio',
+        severity: 'error',
+      });
+    }
+
+    const documento = String(row['Documento'] ?? '').trim();
+    if (!documento) {
+      errors.push({
+        column: 'Documento',
         errorCode: 'CAMPO_REQUERIDO',
         message: 'El número de documento es obligatorio',
         severity: 'error',
       });
-    } else if (docNumber.length > 30) {
+    } else if (documento.length > 30) {
       errors.push({
-        column: 'DOCUMENT_NUMBER',
+        column: 'Documento',
         errorCode: 'LONGITUD_INVALIDA',
         message: 'El número de documento no puede exceder 30 caracteres',
         severity: 'error',
-        rawValue: docNumber,
+        rawValue: documento,
       });
-    } else if (seenDocNumbers.has(docNumber)) {
+    } else if (seenDocNumbers.has(documento)) {
       errors.push({
-        column: 'DOCUMENT_NUMBER',
+        column: 'Documento',
         errorCode: 'DUPLICADO_ARCHIVO',
-        message: `Número de documento duplicado en la fila ${seenDocNumbers.get(docNumber)}`,
+        message: `Número de documento duplicado en la fila ${seenDocNumbers.get(documento)}`,
         severity: 'error',
-        rawValue: docNumber,
+        rawValue: documento,
       });
     } else {
-      seenDocNumbers.set(docNumber, index + 2);
+      seenDocNumbers.set(documento, index + 2);
     }
 
-    const firstName = String(row['FIRST_NAME'] ?? '').trim();
-    if (!firstName) {
+    const contacto = String(row['Contacto'] ?? '').trim();
+    if (!contacto) {
       errors.push({
-        column: 'FIRST_NAME',
+        column: 'Contacto',
         errorCode: 'CAMPO_REQUERIDO',
-        message: 'El nombre es obligatorio',
+        message: 'El contacto es obligatorio',
         severity: 'error',
-      });
-    }
-
-    const lastName = String(row['LAST_NAME'] ?? '').trim();
-    if (!lastName) {
-      errors.push({
-        column: 'LAST_NAME',
-        errorCode: 'CAMPO_REQUERIDO',
-        message: 'El apellido es obligatorio',
-        severity: 'error',
-      });
-    }
-
-    const email = String(row['EMAIL'] ?? '').trim();
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.push({
-        column: 'EMAIL',
-        errorCode: 'EMAIL_INVALIDO',
-        message: 'El formato del correo electrónico no es válido',
-        severity: 'error',
-        rawValue: email,
-      });
-    }
-
-    const status = String(row['EMPLOYMENT_STATUS'] ?? '').trim();
-    if (status && !VALID_EMPLOYMENT_STATUSES.includes(status)) {
-      errors.push({
-        column: 'EMPLOYMENT_STATUS',
-        errorCode: 'VALOR_INVALIDO',
-        message: `Estado laboral inválido. Valores permitidos: ${VALID_EMPLOYMENT_STATUSES.join(', ')}`,
-        severity: 'error',
-        rawValue: status,
-      });
-    }
-
-    const contractType = String(row['CONTRACT_TYPE'] ?? '').trim();
-    if (contractType && !VALID_CONTRACT_TYPES.includes(contractType)) {
-      errors.push({
-        column: 'CONTRACT_TYPE',
-        errorCode: 'VALOR_INVALIDO',
-        message: `Tipo de contrato inválido. Valores permitidos: ${VALID_CONTRACT_TYPES.join(', ')}`,
-        severity: 'error',
-        rawValue: contractType,
-      });
-    }
-
-    const hireDate = String(row['HIRE_DATE'] ?? '').trim();
-    if (hireDate && isNaN(Date.parse(hireDate))) {
-      errors.push({
-        column: 'HIRE_DATE',
-        errorCode: 'FECHA_INVALIDA',
-        message: 'El formato de fecha no es válido (use YYYY-MM-DD)',
-        severity: 'error',
-        rawValue: hireDate,
-      });
-    }
-
-    const hourlyRate = row['HOURLY_RATE'];
-    if (hourlyRate !== undefined && hourlyRate !== '' && hourlyRate !== null) {
-      const rate = Number(hourlyRate);
-      if (isNaN(rate) || rate < 0) {
-        errors.push({
-          column: 'HOURLY_RATE',
-          errorCode: 'VALOR_INVALIDO',
-          message: 'La tarifa horaria debe ser un número positivo',
-          severity: 'error',
-          rawValue: String(hourlyRate),
-        });
-      }
-    }
-
-    const fullName = String(row['FULL_NAME'] ?? '').trim();
-    if (!fullName && firstName && lastName) {
-      warnings.push({
-        column: 'FULL_NAME',
-        errorCode: 'CAMPO_NO_PROPORCIONADO',
-        message: 'El nombre completo se generará automáticamente',
-        severity: 'warning',
       });
     }
 
@@ -325,7 +294,7 @@ export class ImportService {
         message: 'La fecha es obligatoria',
         severity: 'error',
       });
-    } else if (isNaN(Date.parse(fecha))) {
+    } else if (!this.isValidDateOnly(fecha)) {
       errors.push({
         column: 'FECHA',
         errorCode: 'FECHA_INVALIDA',
@@ -380,49 +349,141 @@ export class ImportService {
     };
   }
 
-  previewImport(dto: PreviewImportDto): PreviewResult {
-    const buffer = this.readFileFromPath(dto.filePath);
-    const filename = path.basename(dto.filePath);
+  private validateWorkdayRawRow(
+    row: Record<string, string>,
+    index: number,
+  ): RowValidation {
+    const errors: ValidationError[] = [];
+    const warnings: ValidationError[] = [];
 
-    const rows = this.parseFile(buffer);
-    if (rows.length === 0) {
-      throw new BadRequestException({
-        statusCode: 400,
-        message: 'El archivo está vacío o no contiene datos válidos',
-        code: 'ARCHIVO_VACIO',
-      });
+    const docNumber = String(row['CEDULA EMPLEADO'] ?? '').trim();
+    if (!docNumber) {
+      errors.push({ column: 'CEDULA EMPLEADO', errorCode: 'CAMPO_REQUERIDO', message: 'La cédula del empleado es obligatoria', severity: 'error' });
     }
 
-    const columns = Object.keys(rows[0]);
-    const validations: RowValidation[] = [];
-    const seenDocNumbers = new Map<string, number>();
+    const startDate = String(row['FECHA INICIO'] ?? '').trim();
+    if (!startDate) {
+      errors.push({ column: 'FECHA INICIO', errorCode: 'CAMPO_REQUERIDO', message: 'La fecha de inicio es obligatoria', severity: 'error' });
+    } else if (!this.isValidDateOnly(startDate)) {
+      errors.push({ column: 'FECHA INICIO', errorCode: 'FECHA_INVALIDA', message: 'El formato de fecha de inicio no es válido', severity: 'error', rawValue: startDate });
+    }
 
-    for (let i = 0; i < rows.length; i++) {
-      if (dto.module === ImportModule.EMPLOYEES) {
-        validations.push(this.validateEmployeeRow(rows[i], i, seenDocNumbers));
-      } else if (dto.module === ImportModule.WORK_SESSIONS) {
-        validations.push(this.validateWorkSessionRow(rows[i], i));
-      } else {
-        throw new BadRequestException({
-          statusCode: 400,
-          message: `Módulo ${dto.module} no soportado para previsualización`,
-          code: 'MODULO_NO_SOPORTADO',
-        });
+    const startTime = String(row['HORA INICIO'] ?? '').trim();
+    if (!startTime) {
+      errors.push({ column: 'HORA INICIO', errorCode: 'CAMPO_REQUERIDO', message: 'La hora de inicio es obligatoria', severity: 'error' });
+    } else if (!/^\d{1,2}:\d{2}$/.test(startTime)) {
+      errors.push({ column: 'HORA INICIO', errorCode: 'FORMATO_INVALIDO', message: 'La hora de inicio debe tener formato HH:MM', severity: 'error', rawValue: startTime });
+    }
+
+    const endDate = String(row['FECHA FIN'] ?? '').trim();
+    if (!endDate) {
+      errors.push({ column: 'FECHA FIN', errorCode: 'CAMPO_REQUERIDO', message: 'La fecha de fin es obligatoria', severity: 'error' });
+    } else if (!this.isValidDateOnly(endDate)) {
+      errors.push({ column: 'FECHA FIN', errorCode: 'FECHA_INVALIDA', message: 'El formato de fecha de fin no es válido', severity: 'error', rawValue: endDate });
+    }
+
+    const endTime = String(row['HORA FIN'] ?? '').trim();
+    if (!endTime) {
+      errors.push({ column: 'HORA FIN', errorCode: 'CAMPO_REQUERIDO', message: 'La hora de fin es obligatoria', severity: 'error' });
+    } else if (!/^\d{1,2}:\d{2}$/.test(endTime)) {
+      errors.push({ column: 'HORA FIN', errorCode: 'FORMATO_INVALIDO', message: 'La hora de fin debe tener formato HH:MM', severity: 'error', rawValue: endTime });
+    }
+
+    if (errors.length === 0 && startDate && endDate && startTime && endTime) {
+      const start = new Date(`${startDate}T${startTime}`);
+      const end = new Date(`${endDate}T${endTime}`);
+      if (end.getTime() - start.getTime() <= 0) {
+        errors.push({ column: 'FECHA FIN', errorCode: 'RANGO_INVALIDO', message: 'La fecha/hora de fin debe ser posterior a la de inicio', severity: 'error' });
       }
     }
 
-    const validRows = validations.filter((v) => v.isValid).length;
-    const invalidRows = validations.filter((v) => !v.isValid).length;
-    const warningRows = validations.filter(
-      (v) => v.isValid && v.warnings.length > 0,
-    ).length;
-
     return {
-      summary: { totalRows: rows.length, validRows, invalidRows, warningRows },
-      rows: validations,
-      columns,
-      filename,
+      rowNumber: index + 2,
+      data: row,
+      isValid: errors.length === 0,
+      errors,
+      warnings,
     };
+  }
+
+  private isValidDateOnly(value: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+
+    return (
+      date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day
+    );
+  }
+
+  previewImport(dto: PreviewImportDto): PreviewResult {
+    try {
+      const buffer = this.readFileFromPath(dto.filePath);
+      const filename = path.basename(dto.filePath);
+
+      let rows: Record<string, string>[];
+      try {
+        rows = this.parseFile(buffer);
+      } catch (parseError) {
+        throw new BadRequestException({
+          statusCode: 400,
+          message: `Error al parsear el archivo: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+          code: 'ARCHIVO_CORRUPTO',
+        });
+      }
+
+      if (rows.length === 0) {
+        throw new BadRequestException({
+          statusCode: 400,
+          message: 'El archivo está vacío o no contiene datos válidos',
+          code: 'ARCHIVO_VACIO',
+        });
+      }
+
+      const columns = Object.keys(rows[0]);
+      const validations: RowValidation[] = [];
+      const seenDocNumbers = new Map<string, number>();
+
+      for (let i = 0; i < rows.length; i++) {
+        if (dto.module === ImportModule.EMPLOYEES) {
+          validations.push(this.validateEmployeeRow(rows[i], i, seenDocNumbers));
+        } else if (dto.module === ImportModule.WORK_SESSIONS) {
+          validations.push(this.validateWorkSessionRow(rows[i], i));
+        } else if (dto.module === ImportModule.WORKDAYS) {
+          validations.push(this.validateWorkdayRawRow(rows[i], i));
+        } else {
+          throw new BadRequestException({
+            statusCode: 400,
+            message: `Módulo ${dto.module} no soportado para previsualización`,
+            code: 'MODULO_NO_SOPORTADO',
+          });
+        }
+      }
+
+      const validRows = validations.filter((v) => v.isValid).length;
+      const invalidRows = validations.filter((v) => !v.isValid).length;
+      const warningRows = validations.filter(
+        (v) => v.isValid && v.warnings.length > 0,
+      ).length;
+
+      return {
+        summary: { totalRows: rows.length, validRows, invalidRows, warningRows },
+        rows: validations,
+        columns,
+        filename,
+      };
+    } catch (error) {
+      console.error(`[IMPORT-PREVIEW] Error during validation:`, error);
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException({
+        statusCode: 400,
+        message: `Error inesperado durante la validación: ${error instanceof Error ? error.message : String(error)}`,
+        code: 'VALIDACION_ERROR',
+      });
+    }
   }
 
   async executeImport(
@@ -471,6 +532,8 @@ export class ImportService {
         validations.push(this.validateEmployeeRow(rows[i], i, seenDocNumbers));
       } else if (dto.module === ImportModule.WORK_SESSIONS) {
         validations.push(this.validateWorkSessionRow(rows[i], i));
+      } else if (dto.module === ImportModule.WORKDAYS) {
+        validations.push(this.validateWorkdayRawRow(rows[i], i));
       } else {
         throw new BadRequestException({
           statusCode: 400,
@@ -521,6 +584,10 @@ export class ImportService {
           validRows,
           dto.autoCreateReferences ?? false,
         );
+        insertedRows = result.inserted;
+        updatedRows = result.updated;
+      } else if (dto.module === ImportModule.WORKDAYS) {
+        const result = await this.executeWorkdayRawImport(validRows);
         insertedRows = result.inserted;
         updatedRows = result.updated;
       }
@@ -632,8 +699,33 @@ export class ImportService {
       schedules.map((s) => [s.name.toLowerCase(), s.id]),
     );
 
+    const workConfigs = await this.prisma.workConfig.findMany({
+      select: { id: true, name: true },
+    });
+    const workConfigMap = new Map(
+      workConfigs.map((w) => [w.name.toLowerCase(), w.id]),
+    );
+
+    const defaultScheduleId = scheduleMap.get('administrativo')
+      ?? scheduleMap.get('horario administrativo')
+      ?? schedules.find((s) => s.name.toLowerCase().includes('administrativ'))?.id
+      ?? schedules[0]?.id
+      ?? null;
+
+    const defaultWorkConfigId = workConfigMap.get('administrativo')
+      ?? workConfigMap.get('administrativo (admin)')
+      ?? workConfigs.find((w) => w.name.toLowerCase().includes('administrativ'))?.id
+      ?? workConfigs[0]?.id
+      ?? null;
+
+    const firstEmployee = await this.prisma.employee.findFirst({
+      select: { company: true },
+      where: { company: { not: null } },
+    });
+    const defaultCompany = firstEmployee?.company ?? '';
+
     const docNumbers = validRows.map((r) =>
-      String(r.data['DOCUMENT_NUMBER'] ?? '').trim(),
+      String(r.data['Documento'] ?? '').trim(),
     );
     const existingEmployees = await this.prisma.employee.findMany({
       where: { documentNumber: { in: docNumbers } },
@@ -646,86 +738,51 @@ export class ImportService {
     await this.prisma.$transaction(async (tx) => {
       for (const row of validRows) {
         const data = row.data;
-        const docNumber = String(data['DOCUMENT_NUMBER'] ?? '').trim();
-        const docType = String(
-          data['DOCUMENT_TYPE'] ?? '',
-        ).trim() as EmployeeDocumentType;
-        const firstName = String(data['FIRST_NAME'] ?? '').trim();
-        const lastName = String(data['LAST_NAME'] ?? '').trim();
-        const fullName =
-          String(data['FULL_NAME'] ?? '').trim() || `${firstName} ${lastName}`;
-        const position = String(data['POSITION'] ?? '').trim() || null;
-        const department = String(data['DEPARTMENT'] ?? '').trim() || null;
-        const company = String(data['COMPANY'] ?? '').trim() || null;
-        const costCenter = String(data['COST_CENTER'] ?? '').trim() || null;
-        const email = String(data['EMAIL'] ?? '').trim() || null;
-        const phone = String(data['PHONE'] ?? '').trim() || null;
-        const employmentStatus = (String(
-          data['EMPLOYMENT_STATUS'] ?? 'ACTIVO',
-        ).trim() || 'ACTIVO') as EmploymentStatus;
-        const hireDate = data['HIRE_DATE']
-          ? new Date(String(data['HIRE_DATE']).trim())
-          : new Date();
-        const hourlyRate =
-          data['HOURLY_RATE'] != null && data['HOURLY_RATE'] !== ''
-            ? Number(data['HOURLY_RATE'])
-            : null;
-        const contractType = data['CONTRACT_TYPE']
-          ? (String(data['CONTRACT_TYPE']).trim() as ContractType)
-          : null;
-        const workScheduleName = String(data['WORK_SCHEDULE'] ?? '')
-          .trim()
-          .toLowerCase();
-        const scheduleId = workScheduleName
-          ? (scheduleMap.get(workScheduleName) ?? null)
-          : null;
 
-        const existingId = existingMap.get(docNumber);
+        const nombreRaw = String(data['Postulado_nombre'] ?? '').trim();
+        const { firstName, lastName } = parseColombianName(nombreRaw);
+
+        const documento = String(data['Documento'] ?? '').trim();
+        const cargo = String(data['Cargo'] ?? '').trim() || null;
+        const contacto = String(data['Contacto'] ?? '').trim();
+
+        const isEmail = contacto.includes('@');
+        const email = isEmail ? contacto : null;
+        const phone = isEmail ? null : contacto;
+
+        const employeeData = {
+          documentType: 'CC' as const,
+          documentNumber: documento,
+          firstName,
+          lastName,
+          fullName: nombreRaw,
+          position: cargo,
+          email,
+          phone,
+          department: 'Administrativo',
+          company: defaultCompany,
+          costCenter: 'Default',
+          employmentStatus: 'ACTIVO' as const,
+          contractType: 'INDEFINIDO' as const,
+          hireDate: new Date(),
+          hourlyRate: null as number | null,
+          scheduleId: defaultScheduleId,
+          workConfigId: defaultWorkConfigId,
+        };
+
+        const existingId = existingMap.get(documento);
 
         if (existingId) {
           if (updateExisting) {
             await tx.employee.update({
               where: { id: existingId },
-              data: {
-                documentType: docType,
-                firstName,
-                lastName,
-                fullName,
-                position,
-                department,
-                company,
-                costCenter,
-                email,
-                phone,
-                employmentStatus,
-                hireDate,
-                hourlyRate,
-                contractType,
-                scheduleId,
-              },
+              data: employeeData,
             });
             updated++;
           }
         } else {
           await tx.employee.create({
-            data: {
-              documentType: docType,
-              documentNumber: docNumber,
-              firstName,
-              lastName,
-              fullName,
-              position,
-              department,
-              company,
-              costCenter,
-              email,
-              phone,
-              employmentStatus,
-              hireDate,
-              hourlyRate,
-              contractType,
-              scheduleId,
-            },
+            data: employeeData,
           });
           inserted++;
         }
@@ -746,17 +803,28 @@ export class ImportService {
     );
     const employees = await this.prisma.employee.findMany({
       where: { documentNumber: { in: docNumbers } },
-      select: { id: true, documentNumber: true },
+      select: {
+        id: true,
+        documentNumber: true,
+        workModality: true,
+        weeklyTargetMinutes: true,
+        workConfig: { include: { ordinaryDistributions: true } },
+      },
     });
-    const employeeMap = new Map(employees.map((e) => [e.documentNumber, e.id]));
+    const employeeMap = new Map(employees.map((e) => [e.documentNumber, e]));
+
+    const holidays = await this.prisma.holiday.findMany({
+      select: { date: true },
+    });
+    const holidayDates = holidays.map((h) => h.date);
 
     await this.prisma.$transaction(async (tx) => {
       for (const row of validRows) {
         const data = row.data;
         const docNumber = String(data['CEDULA EMPLEADO'] ?? '').trim();
-        const employeeId = employeeMap.get(docNumber);
+        const employee = employeeMap.get(docNumber);
 
-        if (!employeeId) {
+        if (!employee) {
           continue;
         }
 
@@ -777,13 +845,43 @@ export class ImportService {
           Math.round((end.getTime() - start.getTime()) / 60000),
         );
 
+        const config = employee.workConfig;
+        const ordinaryDistributions =
+          config?.ordinaryDistributions?.map((d) => ({
+            dayOfWeek: d.dayOfWeek,
+            ordinaryMinutesCap: d.ordinaryMinutesCap,
+          })) ?? [];
+
+        const classification = this.engine.classify({
+          startTime: start,
+          endTime: end,
+          ordinaryDistributions,
+          holidays: holidayDates,
+          workModality: employee.workModality,
+          weeklyTargetMinutes:
+            employee.weeklyTargetMinutes ?? config?.weeklyTargetMinutes ?? 2520,
+          accumulatedWeekMinutes: 0,
+          breakMinutes: config?.breakMinutes ?? 60,
+          breakThresholdMinutes: config?.breakThresholdMinutes ?? null,
+        });
+
+        const c = classification;
         await tx.workSession.create({
           data: {
-            employeeId,
+            employeeId: employee.id,
             startTime: start,
             endTime: end,
-            totalMinutes,
-            ordinaryMinutes: totalMinutes,
+            totalMinutes: c.totalMinutes,
+            ordinaryMinutes: c.ordinarioDiurno + c.ordinarioNocturno,
+            nightSurchargeMinutes: c.ordinarioNocturno,
+            extraDayMinutes: c.extraDiurno,
+            extraNightMinutes: c.extraNocturno,
+            sundayMinutes: c.dominicalDiurno + c.dominicalNocturno,
+            holidayMinutes: c.festivoDiurno + c.festivoNocturno,
+            extraHolidayDayMinutes: c.extraDominicalFestivoDiurno,
+            extraHolidayNightMinutes: c.extraDominicalFestivoNocturno,
+            sundayNightSurchargeMinutes:
+              c.dominicalNocturno + c.festivoNocturno,
           },
         });
         inserted++;
@@ -791,6 +889,121 @@ export class ImportService {
     });
 
     return { inserted, updated: 0 };
+  }
+
+  private async executeWorkdayRawImport(
+    validRows: RowValidation[],
+  ): Promise<{ inserted: number; updated: number }> {
+    let inserted = 0;
+
+    const docNumbers = validRows.map((r) =>
+      String(r.data['CEDULA EMPLEADO'] ?? '').trim(),
+    );
+    const employees = await this.prisma.employee.findMany({
+      where: { documentNumber: { in: docNumbers } },
+      select: {
+        id: true,
+        documentNumber: true,
+        workModality: true,
+        workConfig: { include: { ordinaryDistributions: true } },
+      },
+    });
+    const employeeMap = new Map(employees.map((e) => [e.documentNumber, e]));
+
+    const holidays = await this.prisma.holiday.findMany({
+      select: { date: true },
+    });
+    const holidayDates = holidays.map((h) => h.date);
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const row of validRows) {
+        const data = row.data;
+        const docNumber = String(data['CEDULA EMPLEADO'] ?? '').trim();
+        const employee = employeeMap.get(docNumber);
+        if (!employee) continue;
+
+        const startDate = String(data['FECHA INICIO'] ?? '').trim();
+        const startTime = String(data['HORA INICIO'] ?? '').trim();
+        const endDate = String(data['FECHA FIN'] ?? '').trim();
+        const endTime = String(data['HORA FIN'] ?? '').trim();
+
+        const start = new Date(`${startDate}T${startTime}`);
+        const end = new Date(`${endDate}T${endTime}`);
+
+        const config = employee.workConfig;
+        const ordinaryDistributions =
+          config?.ordinaryDistributions?.map((d) => ({
+            dayOfWeek: d.dayOfWeek,
+            ordinaryMinutesCap: d.ordinaryMinutesCap,
+          })) ?? [];
+
+        const classification = this.engine.classify({
+          startTime: start,
+          endTime: end,
+          ordinaryDistributions,
+          holidays: holidayDates,
+          workModality: employee.workModality ?? 'TERRITORIO',
+          weeklyTargetMinutes: config?.weeklyTargetMinutes ?? 2520,
+          accumulatedWeekMinutes: 0,
+          breakMinutes: config?.breakMinutes ?? 60,
+          breakThresholdMinutes: config?.breakThresholdMinutes ?? null,
+        });
+
+        const c = classification;
+        await tx.workSession.create({
+          data: {
+            employeeId: employee.id,
+            startTime: start,
+            endTime: end,
+            totalMinutes: c.totalMinutes,
+            ordinaryMinutes: c.ordinarioDiurno + c.ordinarioNocturno,
+            nightSurchargeMinutes: c.ordinarioNocturno,
+            extraDayMinutes: c.extraDiurno,
+            extraNightMinutes: c.extraNocturno,
+            sundayMinutes: c.dominicalDiurno + c.dominicalNocturno,
+            holidayMinutes: c.festivoDiurno + c.festivoNocturno,
+            extraHolidayDayMinutes: c.extraDominicalFestivoDiurno,
+            extraHolidayNightMinutes: c.extraDominicalFestivoNocturno,
+            sundayNightSurchargeMinutes:
+              c.dominicalNocturno + c.festivoNocturno,
+          },
+        });
+        inserted++;
+      }
+    });
+
+    return { inserted, updated: 0 };
+  }
+
+  generateBdPersonasEpTemplate(): Buffer {
+    const headers = [
+      'Postulado_nombre_depurado',
+      'Cargo',
+      'Documento',
+      'Contacto',
+    ];
+
+    const wb = XLSX.utils.book_new();
+    const wsData: (string | number)[][] = [headers];
+    wsData.push([
+      'Carlos Andrés Ramírez Pérez',
+      'Desarrollador Senior',
+      '1234567890',
+      '3001234567',
+    ]);
+    wsData.push([
+      'María García López',
+      'Analista de Recursos Humanos',
+      '9876543210',
+      '3109876543',
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = headers.map(() => ({ wch: 30 }));
+
+    XLSX.utils.book_append_sheet(wb, ws, 'BD Personas EP');
+
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   }
 
   generateWorkSessionTemplate(): Buffer {
@@ -821,31 +1034,48 @@ export class ImportService {
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   }
 
+  generateWorkdayTemplate(): Buffer {
+    const wb = XLSX.utils.book_new();
+    const wsData: (string | number)[][] = [WORKDAY_RAW_TEMPLATE_HEADERS];
+    wsData.push([
+      '1234567890',
+      '2026-07-08',
+      '21:30',
+      '2026-07-09',
+      '06:30',
+    ]);
+    wsData.push([
+      '9876543210',
+      '2026-07-08',
+      '07:00',
+      '2026-07-08',
+      '17:00',
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = WORKDAY_RAW_TEMPLATE_HEADERS.map(() => ({ wch: 24 }));
+    XLSX.utils.book_append_sheet(wb, ws, 'Jornadas');
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  }
+
   generateEmployeeTemplate(): Buffer {
     const wb = XLSX.utils.book_new();
 
     const wsData: (string | number)[][] = [EMPLOYEE_TEMPLATE_HEADERS];
     wsData.push([
-      'CC',
-      '1234567890',
-      'Carlos Andrés',
-      'Ramírez Pérez',
       'Carlos Andrés Ramírez Pérez',
       'Desarrollador Senior',
-      'Tecnología',
-      'Empresa XYZ',
-      'CC-001',
-      'carlos.ramirez@empresa.com',
+      '1234567890',
       '3001234567',
-      'ACTIVO',
-      '2026-01-15',
-      '50000',
-      'INDEFINIDO',
-      'Horario Normal',
+    ]);
+    wsData.push([
+      'María García López',
+      'Analista de Recursos Humanos',
+      '9876543210',
+      'maria.garcia@empresa.com',
     ]);
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = EMPLOYEE_TEMPLATE_HEADERS.map(() => ({ wch: 24 }));
+    ws['!cols'] = EMPLOYEE_TEMPLATE_HEADERS.map(() => ({ wch: 30 }));
 
     XLSX.utils.book_append_sheet(wb, ws, 'Empleados');
 
@@ -856,35 +1086,24 @@ export class ImportService {
     const employees = await this.prisma.employee.findMany({
       where: { isActive: true },
       orderBy: { lastName: 'asc' },
-      include: { schedule: { select: { name: true } } },
     });
 
     const wb = XLSX.utils.book_new();
     const wsData: (string | number)[][] = [EMPLOYEE_TEMPLATE_HEADERS];
 
     for (const emp of employees) {
+      const nombre = emp.fullName || `${emp.firstName} ${emp.lastName}`;
+      const contacto = emp.email || emp.phone || '';
       wsData.push([
-        emp.documentType,
-        emp.documentNumber,
-        emp.firstName,
-        emp.lastName,
-        emp.fullName || `${emp.firstName} ${emp.lastName}`,
+        nombre,
         emp.position ?? '',
-        emp.department ?? '',
-        emp.company ?? '',
-        emp.costCenter ?? '',
-        emp.email ?? '',
-        emp.phone ?? '',
-        emp.employmentStatus,
-        emp.hireDate ? emp.hireDate.toISOString().split('T')[0] : '',
-        emp.hourlyRate != null ? emp.hourlyRate : '',
-        emp.contractType ?? '',
-        emp.schedule?.name ?? '',
+        emp.documentNumber,
+        contacto,
       ]);
     }
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!cols'] = EMPLOYEE_TEMPLATE_HEADERS.map(() => ({ wch: 24 }));
+    ws['!cols'] = EMPLOYEE_TEMPLATE_HEADERS.map(() => ({ wch: 30 }));
 
     XLSX.utils.book_append_sheet(wb, ws, 'Empleados');
 
@@ -973,6 +1192,32 @@ export class ImportService {
     const backupPathRef = importHistory.backupPath;
 
     await this.restoreBackup(importHistory.backupPath);
+
+    await this.prisma.importHistory.upsert({
+      where: { id: importId },
+      update: { status: ImportStatus.ROLLED_BACK },
+      create: {
+        id: importHistory.id,
+        module: importHistory.module,
+        filename: importHistory.filename,
+        fileSize: importHistory.fileSize,
+        filePath: importHistory.filePath,
+        status: ImportStatus.ROLLED_BACK,
+        totalRows: importHistory.totalRows,
+        insertedRows: importHistory.insertedRows,
+        updatedRows: importHistory.updatedRows,
+        errorRows: importHistory.errorRows,
+        warningRows: importHistory.warningRows,
+        durationMs: importHistory.durationMs,
+        backupPath: backupPathRef,
+        errorReportPath: importHistory.errorReportPath,
+        userId: importHistory.userId,
+        autoCreateRefs: importHistory.autoCreateRefs,
+        updateExisting: importHistory.updateExisting,
+        dryRun: importHistory.dryRun,
+        createdAt: importHistory.createdAt,
+      },
+    });
 
     void this.audit.log({
       userId,

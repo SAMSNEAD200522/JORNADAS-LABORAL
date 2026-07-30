@@ -1,0 +1,19 @@
+[[permission]]
+identifier = "app-commands"
+description = "Allow all custom application commands"
+commands.allow = [
+    "save_download_file",
+    "save_download_file_post",
+    "get_app_version",
+    "get_system_info",
+    "create_backup",
+    "open_in_explorer",
+    "open_file_dialog",
+    "save_file_dialog",
+    "open_directory_dialog",
+    "import_file",
+    "preview_import",
+    "get_import_history",
+    "download_error_report",
+    "rollback_import"
+]

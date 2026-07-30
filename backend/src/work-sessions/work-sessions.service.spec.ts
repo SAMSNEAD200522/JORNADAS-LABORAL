@@ -200,6 +200,23 @@ describe('WorkSessionsService', () => {
       );
     });
 
+    it('debe rechazar fechas inválidas al actualizar', async () => {
+      mockPrisma.workSession.findUnique.mockResolvedValue({
+        id: 1,
+        isVoided: false,
+        employeeId: 1,
+        startTime: new Date('2026-07-08T07:00:00.000Z'),
+        endTime: new Date('2026-07-08T17:00:00.000Z'),
+        compensatoryType: null,
+        compensatoryObservation: null,
+      });
+
+      await expect(
+        service.update(1, { startTime: 'fecha-invalida' } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockEngine.classify).not.toHaveBeenCalled();
+    });
+
     it('debe cambiar de empleado y reclasificar con los datos del nuevo', async () => {
       mockPrisma.workSession.findUnique.mockResolvedValue({
         id: 1,

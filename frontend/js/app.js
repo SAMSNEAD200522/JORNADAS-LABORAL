@@ -693,21 +693,64 @@ let sesPage = 1;
 
 const debouncedLoadJornadas = debounce(() => loadJornadas(1), 300);
 
+let jornadaImportState = null;
+
 async function renderJornadas() {
   const write = canWrite();
   document.getElementById('pageContent').innerHTML = `
-    <div class="page-header"><h1>Jornadas</h1>
-      ${write ? '<button class="btn btn-primary" onclick="showSesModal()">+ Nueva</button>' : ''}
+    <div class="page-header"><h1>Jornadas</h1></div>
+    <div class="import-tabs" style="margin-bottom:16px">
+      <button class="import-tab active" data-tab="listado" onclick="switchJornadasTab('listado')">Listado</button>
+      <button class="import-tab" data-tab="importar" onclick="switchJornadasTab('importar')">Importar</button>
     </div>
-    <div class="filters">
-      <input id="sesSearch" type="date" onchange="debouncedLoadJornadas()" title="Fecha inicio">
-      <input id="sesEnd" type="date" onchange="debouncedLoadJornadas()" title="Fecha fin">
-      <button class="btn btn-sm btn-secondary" onclick="document.getElementById('sesSearch').value='';document.getElementById('sesEnd').value='';debouncedLoadJornadas()">Limpiar</button>
+    <div class="import-tab-content active" id="tabJorListado">
+      ${write ? '<div style="margin-bottom:12px"><button class="btn btn-primary" onclick="showSesModal()">+ Nueva</button></div>' : ''}
+      <div class="filters">
+        <input id="sesSearch" type="date" onchange="debouncedLoadJornadas()" title="Fecha inicio">
+        <input id="sesEnd" type="date" onchange="debouncedLoadJornadas()" title="Fecha fin">
+        <button class="btn btn-sm btn-secondary" onclick="document.getElementById('sesSearch').value='';document.getElementById('sesEnd').value='';debouncedLoadJornadas()">Limpiar</button>
+      </div>
+      <div class="table-wrap"><table><thead><tr>
+        <th>Empleado</th><th>Inicio</th><th>Fin</th><th>Total</th><th title="Horas ordinarias trabajadas">Ordinarias</th><th title="Tiempo trabajado con recargo nocturno">Rec. noct.</th><th title="Horas extra diurnas">Extra diur.</th><th title="Horas extra nocturnas">Extra noct.</th><th title="Tiempo trabajado en domingo">Dominical</th><th title="Tiempo trabajado en d&iacute;a festivo">Festiva</th><th title="Horas extra festivas diurnas">Ex.fest.diur.</th><th title="Horas extra festivas nocturnas">Ex.fest.noct.</th><th title="Recargo nocturno dominical/festivo">Rec.ndf</th><th title="Tipo compensatorio">Comp.</th><th>Auditar</th>${write ? '<th>Acciones</th>' : ''}
+      </tr></thead><tbody id="sesTbody"></tbody></table></div>
+      <div class="pagination" id="sesPagination"></div>
     </div>
-    <div class="table-wrap"><table><thead><tr>
-      <th>Empleado</th><th>Inicio</th><th>Fin</th><th>Total</th><th title="Horas ordinarias trabajadas">Ordinarias</th><th title="Tiempo trabajado con recargo nocturno">Rec. noct.</th><th title="Horas extra diurnas">Extra diur.</th><th title="Horas extra nocturnas">Extra noct.</th><th title="Tiempo trabajado en domingo">Dominical</th><th title="Tiempo trabajado en d&iacute;a festivo">Festiva</th><th title="Horas extra festivas diurnas">Ex.fest.diur.</th><th title="Horas extra festivas nocturnas">Ex.fest.noct.</th><th title="Recargo nocturno dominical/festivo">Rec.ndf</th><th title="Tipo compensatorio">Comp.</th><th>Auditar</th>${write ? '<th>Acciones</th>' : ''}
-    </tr></thead><tbody id="sesTbody"></tbody></table></div>
-    <div class="pagination" id="sesPagination"></div>
+    <div class="import-tab-content" id="tabJorImportar" style="display:none">
+      <div class="card">
+        <h3 class="card-title">Importar jornadas desde Excel</h3>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Selecciona un archivo Excel con los registros de jornadas. El sistema importar\u00e1 y clasificar\u00e1 cada jornada usando el motor laboral.</p>
+        <div class="import-upload-area" id="jorUploadArea">
+          <div class="import-upload-icon">
+            <span class="material-icons" style="font-size:48px;color:var(--primary)">cloud_upload</span>
+          </div>
+          <p>Arrastra un archivo aqu\u00ed o haz clic para seleccionar</p>
+          <p style="font-size:12px;color:var(--text-muted)">Formatos soportados: Excel (.xlsx), CSV, ODS</p>
+          <input type="file" id="jorImportFileInput" accept=".xlsx,.xls,.csv,.ods" style="display:none" onchange="onJorImportFileSelect(event)">
+        </div>
+        <div id="jorImportFileInfo" style="display:none;margin-top:12px"></div>
+        <div style="display:flex;gap:8px;margin-top:16px;align-items:center">
+          <button class="btn btn-secondary" id="btnJorDownloadTemplate" onclick="downloadWorkdayTemplate()">Descargar plantilla</button>
+          <button class="btn btn-secondary" id="btnJorPreview" disabled onclick="previewJorImport()">Vista previa</button>
+          <button class="btn btn-primary" id="btnJorExecute" disabled onclick="executeJorImport()">Ejecutar importaci\u00f3n</button>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-left:auto">
+            <input type="checkbox" id="jorDryRun" checked> Modo simulaci\u00f3n
+          </label>
+        </div>
+      </div>
+      <div id="jorImportPreviewSection" style="display:none;margin-top:16px">
+        <div class="card">
+          <h3 class="card-title">Resultado de validaci\u00f3n</h3>
+          <div id="jorImportPreviewSummary"></div>
+          <div id="jorImportPreviewErrors" style="margin-top:12px"></div>
+        </div>
+      </div>
+      <div id="jorImportResultSection" style="display:none;margin-top:16px">
+        <div class="card">
+          <h3 class="card-title">Resultado de importaci\u00f3n</h3>
+          <div id="jorImportResultContent"></div>
+        </div>
+      </div>
+    </div>
     <div class="modal-overlay" id="sesModal"><div class="modal"><h2 id="sesModalTitle">Nueva Jornada</h2>
       <div class="modal-body">
         <div class="form-group"><label>Empleado</label>
@@ -718,8 +761,15 @@ async function renderJornadas() {
           </div>
           <div id="sesf_empSelected" style="display:none;margin-top:6px;padding:6px 10px;background:#e8f5e9;border-radius:6px;font-size:12px;font-weight:500;color:#2e7d32"></div>
         </div>
-        <div class="form-row"><div class="form-group half"><label>Inicio</label><input id="sesf_start" type="datetime-local"></div>
-        <div class="form-group half"><label>Fin</label><input id="sesf_end" type="datetime-local"></div></div>
+        <div class="form-row"><div class="form-group half"><label>Fecha inicio</label><input id="sesf_startDate" type="date"></div>
+        <div class="form-group half"><label>Hora inicio</label><input id="sesf_startTime" type="time"></div></div>
+        <div class="form-row"><div class="form-group half"><label>Fecha fin</label><input id="sesf_endDate" type="date"></div>
+        <div class="form-group half"><label>Hora fin</label><input id="sesf_endTime" type="time"></div></div>
+        <div id="sesPreview" class="form-row" style="display:none;align-items:center;gap:8px;padding:4px 0;font-size:13px;color:var(--text-secondary)">
+          <span class="material-icons" style="font-size:16px">schedule</span>
+          <span id="sesDuration"></span>
+        </div>
+        <div id="sesCrossMsg" style="display:none;font-size:11px;padding:0 0 4px;font-style:italic;color:#888">La hora de fin es anterior a la de inicio. La fecha se ajust\u00f3 al d\u00eda siguiente (la jornada cruza medianoche).</div>
       </div>
       <div class="modal-buttons">
         <button class="btn btn-secondary" onclick="closeModal('sesModal')">Cancelar</button>
@@ -769,7 +819,233 @@ async function renderJornadas() {
       document.getElementById('sesf_empResults').style.display = 'none';
     }, 180);
   });
+  const jorUploadArea = document.getElementById('jorUploadArea');
+  jorUploadArea.addEventListener('click', () => { document.getElementById('jorImportFileInput').click(); });
+  jorUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); jorUploadArea.classList.add('import-drag-over'); });
+  jorUploadArea.addEventListener('dragleave', () => { jorUploadArea.classList.remove('import-drag-over'); });
+  jorUploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    jorUploadArea.classList.remove('import-drag-over');
+    if (e.dataTransfer.files.length > 0) handleJorImportFile(e.dataTransfer.files[0]);
+  });
   loadJornadas(1);
+}
+
+function switchJornadasTab(tab) {
+  document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.import-tab-content').forEach(c => { c.style.display = 'none'; c.classList.remove('active'); });
+  document.querySelector(`.import-tab[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById('tabJor' + tab.charAt(0).toUpperCase() + tab.slice(1)).style.display = '';
+  if (tab === 'listado') loadJornadas(1);
+}
+
+/* ---- JORNADAS IMPORT ---- */
+function onJorImportFileSelect(event) {
+  if (event.target.files.length > 0) handleJorImportFile(event.target.files[0]);
+}
+
+async function handleJorImportFile(file) {
+  jornadaImportState = { file, filePath: null, preview: null };
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['xlsx', 'xls', 'csv', 'ods'].includes(ext)) {
+    snackbar('Formato no soportado. Use Excel, CSV o ODS.', true);
+    return;
+  }
+  document.getElementById('jorImportFileInfo').style.display = 'block';
+  document.getElementById('jorImportFileInfo').innerHTML = `
+    <div class="import-file-info">
+      <span class="material-icons" style="color:var(--primary)">description</span>
+      <div>
+        <strong>${escapeHtml(file.name)}</strong>
+        <span style="color:var(--text-muted);font-size:12px;margin-left:8px">${(file.size / 1024).toFixed(1)} KB</span>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="clearJorImportFile()" style="margin-left:auto">Quitar</button>
+    </div>
+  `;
+  document.getElementById('btnJorPreview').disabled = false;
+  document.getElementById('btnJorExecute').disabled = true;
+  document.getElementById('jorImportPreviewSection').style.display = 'none';
+  document.getElementById('jorImportResultSection').style.display = 'none';
+}
+
+function clearJorImportFile() {
+  jornadaImportState = null;
+  document.getElementById('jorImportFileInput').value = '';
+  document.getElementById('jorImportFileInfo').style.display = 'none';
+  document.getElementById('btnJorPreview').disabled = true;
+  document.getElementById('btnJorExecute').disabled = true;
+  document.getElementById('jorImportPreviewSection').style.display = 'none';
+  document.getElementById('jorImportResultSection').style.display = 'none';
+}
+
+async function previewJorImport() {
+  if (!jornadaImportState?.file) { snackbar('Seleccione un archivo primero', true); return; }
+  document.getElementById('btnJorPreview').disabled = true;
+  document.getElementById('btnJorPreview').textContent = 'Validando...';
+  document.getElementById('jorImportPreviewSection').style.display = 'none';
+  try {
+    const formData = new FormData();
+    formData.append('file', jornadaImportState.file);
+    const token = localStorage.getItem('token');
+    const upRes = await fetch(`${API}/import/upload`, {
+      method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData,
+    });
+    if (!upRes.ok) { let e; try { e = (await upRes.json()).mensaje; } catch(_) {} throw new Error(e || 'Error al subir archivo'); }
+    const upData = await upRes.json();
+    jornadaImportState.filePath = upData.filePath;
+    const prevRes = await fetch(`${API}/import/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ filePath: upData.filePath, module: 'WORKDAYS', autoCreateReferences: true, updateExisting: true }),
+    });
+    if (!prevRes.ok) { let e; try { e = (await prevRes.json()).mensaje; } catch(_) {} throw new Error(e || 'Error al validar'); }
+    const prevData = await prevRes.json();
+    jornadaImportState.preview = prevData;
+    renderJorImportPreview(prevData);
+    if (prevData.summary && prevData.summary.invalidRows === 0) {
+      document.getElementById('btnJorExecute').disabled = false;
+    }
+  } catch (e) {
+    snackbar(e.message || 'Error al procesar archivo', true);
+  } finally {
+    document.getElementById('btnJorPreview').disabled = false;
+    document.getElementById('btnJorPreview').textContent = 'Vista previa';
+  }
+}
+
+function renderJorImportPreview(data) {
+  const section = document.getElementById('jorImportPreviewSection');
+  section.style.display = '';
+  const s = data.summary;
+  document.getElementById('jorImportPreviewSummary').innerHTML = `
+    <div class="import-summary-grid">
+      <div class="import-summary-item">
+        <span class="import-summary-value">${s.totalRows}</span>
+        <span class="import-summary-label">Total filas</span>
+      </div>
+      <div class="import-summary-item import-summary-valid">
+        <span class="import-summary-value">${s.validRows}</span>
+        <span class="import-summary-label">V\u00e1lidas</span>
+      </div>
+      <div class="import-summary-item import-summary-warning">
+        <span class="import-summary-value">${s.warningRows}</span>
+        <span class="import-summary-label">Advertencias</span>
+      </div>
+      <div class="import-summary-item import-summary-error">
+        <span class="import-summary-value">${s.invalidRows}</span>
+        <span class="import-summary-label">Errores</span>
+      </div>
+    </div>
+  `;
+  if (data.rows && data.rows.length > 0) {
+    const errorRows = data.rows.filter(r => !r.isValid);
+    const warningRows = data.rows.filter(r => r.warnings && r.warnings.length > 0 && r.isValid);
+    let html = '';
+    if (errorRows.length > 0) {
+      html += `<h4 style="margin-bottom:8px;color:var(--danger)">Errores (${errorRows.length})</h4>
+        <div class="table-wrap"><table><thead><tr><th>Fila</th><th>Documento</th><th>Nombre</th><th>Errores</th></tr></thead><tbody>
+        ${errorRows.map(r => `<tr>
+          <td>${r.rowNumber}</td>
+          <td>${escapeHtml(String(r.data?.DOCUMENT_NUMBER || ''))}</td>
+          <td>${escapeHtml(String(r.data?.FIRST_NAME || '') + ' ' + String(r.data?.LAST_NAME || ''))}</td>
+          <td style="color:var(--danger)">${r.errors.map(e => escapeHtml(e.message)).join('<br>')}</td>
+        </tr>`).join('')}
+        </tbody></table></div>`;
+    }
+    if (warningRows.length > 0) {
+      html += `<h4 style="margin:16px 0 8px;color:var(--warning)">Advertencias (${warningRows.length})</h4>
+        <div class="table-wrap"><table><thead><tr><th>Fila</th><th>Documento</th><th>Nombre</th><th>Advertencias</th></tr></thead><tbody>
+        ${warningRows.map(r => `<tr>
+          <td>${r.rowNumber}</td>
+          <td>${escapeHtml(String(r.data?.DOCUMENT_NUMBER || ''))}</td>
+          <td>${escapeHtml(String(r.data?.FIRST_NAME || '') + ' ' + String(r.data?.LAST_NAME || ''))}</td>
+          <td style="color:var(--warning)">${r.warnings.map(w => escapeHtml(w.message)).join('<br>')}</td>
+        </tr>`).join('')}
+        </tbody></table></div>`;
+    }
+    document.getElementById('jorImportPreviewErrors').innerHTML = html;
+  }
+}
+
+async function executeJorImport() {
+  if (!jornadaImportState?.filePath) { snackbar('Primero valide el archivo', true); return; }
+  const isDryRun = document.getElementById('jorDryRun').checked;
+  if (!isDryRun) {
+    if (!confirm('\u00bfEst\u00e1 seguro de ejecutar la importaci\u00f3n?\n\nSe crear\u00e1 un backup autom\u00e1tico antes de proceder.')) return;
+  }
+  document.getElementById('btnJorExecute').disabled = true;
+  document.getElementById('btnJorExecute').textContent = 'Importando...';
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/import/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        filePath: jornadaImportState.filePath,
+        module: 'WORKDAYS',
+        autoCreateReferences: true,
+        updateExisting: true,
+        dryRun: isDryRun,
+      }),
+    });
+    if (!res.ok) { let e; try { e = (await res.json()).mensaje; } catch(_) {} throw new Error(e || 'Error al ejecutar importaci\u00f3n'); }
+    const result = await res.json();
+    document.getElementById('jorImportResultSection').style.display = '';
+    const s = result.summary;
+    document.getElementById('jorImportResultContent').innerHTML = `
+      <div class="import-summary-grid">
+        <div class="import-summary-item import-summary-valid">
+          <span class="import-summary-value">${s.insertedRows}</span>
+          <span class="import-summary-label">Insertadas</span>
+        </div>
+        <div class="import-summary-item import-summary-valid">
+          <span class="import-summary-value">${s.updatedRows}</span>
+          <span class="import-summary-label">Actualizadas</span>
+        </div>
+        <div class="import-summary-item import-summary-error">
+          <span class="import-summary-value">${s.errorRows}</span>
+          <span class="import-summary-label">Errores</span>
+        </div>
+        <div class="import-summary-item">
+          <span class="import-summary-value">${(s.durationMs / 1000).toFixed(1)}s</span>
+          <span class="import-summary-label">Duraci\u00f3n</span>
+        </div>
+      </div>
+    `;
+    snackbar(isDryRun ? 'Simulaci\u00f3n completada' : 'Importaci\u00f3n completada');
+  } catch (e) {
+    snackbar(e.message || 'Error al importar', true);
+  } finally {
+    document.getElementById('btnJorExecute').disabled = false;
+    document.getElementById('btnJorExecute').textContent = 'Ejecutar importaci\u00f3n';
+  }
+}
+
+async function downloadWorkdayTemplate() {
+  try {
+    const token = localStorage.getItem('token');
+    if (window.__TAURI_INTERNALS__) {
+      const absUrl = window.location.origin + '/api/v1/import/template/workdays';
+      const path = await window.__TAURI_INTERNALS__.invoke('save_download_file_post', {
+        url: absUrl, token, defaultName: 'plantilla_jornadas.xlsx',
+      });
+      snackbar('Plantilla descargada en: ' + path);
+    } else {
+      const res = await fetch(`${API}/import/template/workdays`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error('Error');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'plantilla_jornadas.xlsx'; document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      snackbar('Plantilla descargada');
+    }
+  } catch (e) { snackbar('Error al descargar plantilla: ' + (e || ''), true); }
 }
 
 async function loadJornadas(page) {
@@ -816,16 +1092,26 @@ function showSesModal(s) {
   editingSesId = s?.id || null;
   document.getElementById('sesModalTitle').textContent = s ? 'Editar Jornada' : 'Nueva Jornada';
   if (s) {
-    document.getElementById('sesf_start').value = s.startTime.slice(0,16);
-    document.getElementById('sesf_end').value = s.endTime.slice(0,16);
+    const sd = new Date(s.startTime);
+    const ed = new Date(s.endTime);
+    document.getElementById('sesf_startDate').value = sd.toISOString().slice(0,10);
+    document.getElementById('sesf_startTime').value = sd.toISOString().slice(11,16);
+    document.getElementById('sesf_endDate').value = ed.toISOString().slice(0,10);
+    document.getElementById('sesf_endTime').value = ed.toISOString().slice(11,16);
   } else {
-    document.getElementById('sesf_start').value = '';
-    document.getElementById('sesf_end').value = '';
+    document.getElementById('sesf_startDate').value = '';
+    document.getElementById('sesf_startTime').value = '';
+    document.getElementById('sesf_endDate').value = '';
+    document.getElementById('sesf_endTime').value = '';
     document.getElementById('sesf_empId').value = '';
     document.getElementById('sesf_empSearch').value = '';
     document.getElementById('sesf_empResults').style.display = 'none';
     document.getElementById('sesf_empSelected').style.display = 'none';
   }
+  ['sesf_startDate','sesf_startTime','sesf_endDate','sesf_endTime'].forEach(id => {
+    document.getElementById(id).oninput = updateJornadaPreview;
+  });
+  updateJornadaPreview();
   document.getElementById('sesModal').classList.add('show');
 }
 
@@ -843,11 +1129,49 @@ function editSes(id) {
   }).catch(() => snackbar('Error', true));
 }
 
+function updateJornadaPreview() {
+  const sd = document.getElementById('sesf_startDate').value;
+  const st = document.getElementById('sesf_startTime').value;
+  const ed = document.getElementById('sesf_endDate').value;
+  const et = document.getElementById('sesf_endTime').value;
+  const preview = document.getElementById('sesPreview');
+  const durEl = document.getElementById('sesDuration');
+  const msgEl = document.getElementById('sesCrossMsg');
+  if (!sd || !st || !ed || !et) { preview.style.display = 'none'; msgEl.style.display = 'none'; return; }
+  const sameDate = sd === ed;
+  const crossesMidnight = sameDate && et < st;
+  if (crossesMidnight) {
+    const end = new Date(ed + 'T' + et);
+    end.setDate(end.getDate() + 1);
+    document.getElementById('sesf_endDate').value = end.toISOString().slice(0, 10);
+  }
+  msgEl.style.display = crossesMidnight ? 'block' : 'none';
+  const finalEd = document.getElementById('sesf_endDate').value;
+  const start = new Date(sd + 'T' + st);
+  const end = new Date(finalEd + 'T' + et);
+  const diffMs = end.getTime() - start.getTime();
+  if (diffMs > 0) {
+    const totalMin = Math.round(diffMs / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    durEl.textContent = h + 'h ' + String(m).padStart(2, '0') + 'm';
+    preview.style.display = 'flex';
+  } else {
+    preview.style.display = 'none';
+    msgEl.style.display = 'none';
+  }
+}
+
 async function saveJornada() {
+  const sd = document.getElementById('sesf_startDate').value;
+  const st = document.getElementById('sesf_startTime').value;
+  const ed = document.getElementById('sesf_endDate').value;
+  const et = document.getElementById('sesf_endTime').value;
+  if (!sd || !st || !ed || !et) { snackbar('Complete fecha y hora de inicio y fin', true); return; }
   const data = {
     employeeId: parseInt(document.getElementById('sesf_empId').value),
-    startTime: document.getElementById('sesf_start').value,
-    endTime: document.getElementById('sesf_end').value,
+    startTime: sd + 'T' + st,
+    endTime: ed + 'T' + et,
   };
   try {
     if (editingSesId) {
@@ -1422,11 +1746,15 @@ function renderReporte(containerId, data) {
       <div class="table-wrap"><table><thead><tr>
         <th>Empleado</th><th>Documento</th><th>Jornadas</th><th>Horas</th><th>Ord</th><th>Noct</th><th>ExtD</th><th>ExtN</th><th>Dom</th><th>Fest</th><th>ExFD</th><th>ExFN</th><th>Rndf</th>
       </tr></thead><tbody>
-        ${data.data.map(r => `<tr>
+        ${data.data.map(r => {
+          const workedMin = (r.ordinaryMinutes||0) + (r.sundayMinutes||0) + (r.holidayMinutes||0) +
+            (r.extraDayMinutes||0) + (r.extraNightMinutes||0) +
+            (r.extraHolidayDayMinutes||0) + (r.extraHolidayNightMinutes||0);
+          return `<tr>
           <td><strong>${escapeHtml(r.employee.firstName)} ${escapeHtml(r.employee.lastName)}</strong></td>
           <td>${escapeHtml(r.employee.documentNumber)}</td>
           <td>${r.totalSessions}</td>
-          <td><strong>${formatMinutesToHours(r.totalMinutes)}</strong></td>
+          <td><strong>${formatMinutesToHours(workedMin)}</strong></td>
           <td>${formatMinutesToHours(r.ordinaryMinutes)}</td>
           <td>${formatMinutesToHours(r.nightSurchargeMinutes)}</td>
           <td>${formatMinutesToHours(r.extraDayMinutes)}</td>
@@ -1436,7 +1764,8 @@ function renderReporte(containerId, data) {
           <td>${formatMinutesToHours(r.extraHolidayDayMinutes)}</td>
           <td>${formatMinutesToHours(r.extraHolidayNightMinutes)}</td>
           <td>${formatMinutesToHours(r.sundayNightSurchargeMinutes)}</td>
-        </tr>`).join('')}
+        </tr>`;
+        }).join('')}
       </tbody></table></div>
     </div>
   `;
@@ -1460,33 +1789,38 @@ async function exportHistoricXLSX() {
       { label: 'Entrada', key: 'entrada' },
       { label: 'Salida', key: 'salida' },
       { label: 'Total', key: 'total' },
-      { label: 'Ordinarias', key: 'ord' },
-      { label: 'Nocturnas', key: 'noct' },
-      { label: 'Extra Diurnas', key: 'extD' },
-      { label: 'Extra Nocturnas', key: 'extN' },
-      { label: 'Dominical', key: 'dom' },
-      { label: 'Festivo', key: 'fest' },
-      { label: 'Extra Fest. Diurnas', key: 'exFD' },
-      { label: 'Extra Fest. Nocturnas', key: 'exFN' },
-      { label: 'Recargo NDF', key: 'rndf' },
+      { label: '001 Ordinarias', key: 'ord' },
+      { label: '006-RECNOC Nocturnas', key: 'noct' },
+      { label: '002-HED Extra Diurnas', key: 'extD' },
+      { label: '003-HEN Extra Nocturnas', key: 'extN' },
+      { label: '013-DOMINGO Dominical', key: 'dom' },
+      { label: '014-FESTIVO Festivo', key: 'fest' },
+      { label: '004-HEFD Extra Fest. Diurnas', key: 'exFD' },
+      { label: '005-HEFN Extra Fest. Nocturnas', key: 'exFN' },
+      { label: '012-REC.NDF Recargo NDF', key: 'rndf' },
       { label: 'Compensatorio', key: 'comp' },
     ];
-    const rows = sessions.map(s => ({
-      fecha: new Date(s.startTime).toLocaleDateString('es-CO'),
-      entrada: new Date(s.startTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
-      salida: new Date(s.endTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
-      total: formatMinutesToHours(s.totalMinutes),
-      ord: formatMinutesToHours(s.ordinaryMinutes),
-      noct: formatMinutesToHours(s.nightSurchargeMinutes),
-      extD: formatMinutesToHours(s.extraDayMinutes),
-      extN: formatMinutesToHours(s.extraNightMinutes),
-      dom: formatMinutesToHours(s.sundayMinutes),
-      fest: formatMinutesToHours(s.holidayMinutes),
-      exFD: formatMinutesToHours(s.extraHolidayDayMinutes),
-      exFN: formatMinutesToHours(s.extraHolidayNightMinutes),
-      rndf: formatMinutesToHours(s.sundayNightSurchargeMinutes),
-      comp: ({NO_APLICA:'-',CON_COMPENSATORIO:'Descanso',SIN_COMPENSATORIO:'Pago',PENDIENTE_DEFINICION:'Pendiente'})[s.compensatoryType] || '-',
-    }));
+    const rows = sessions.map(s => {
+      const workedMinutes = (s.ordinaryMinutes||0) + (s.sundayMinutes||0) + (s.holidayMinutes||0) +
+        (s.extraDayMinutes||0) + (s.extraNightMinutes||0) +
+        (s.extraHolidayDayMinutes||0) + (s.extraHolidayNightMinutes||0);
+      return {
+        fecha: new Date(s.startTime).toLocaleDateString('es-CO'),
+        entrada: new Date(s.startTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+        salida: new Date(s.endTime).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+        total: formatMinutesToHours(workedMinutes),
+        ord: formatMinutesToHours(s.ordinaryMinutes),
+        noct: formatMinutesToHours(s.nightSurchargeMinutes),
+        extD: formatMinutesToHours(s.extraDayMinutes),
+        extN: formatMinutesToHours(s.extraNightMinutes),
+        dom: formatMinutesToHours(s.sundayMinutes),
+        fest: formatMinutesToHours(s.holidayMinutes),
+        exFD: formatMinutesToHours(s.extraHolidayDayMinutes),
+        exFN: formatMinutesToHours(s.extraHolidayNightMinutes),
+        rndf: formatMinutesToHours(s.sundayNightSurchargeMinutes),
+        comp: ({NO_APLICA:'-',CON_COMPENSATORIO:'Descanso',SIN_COMPENSATORIO:'Pago',PENDIENTE_DEFINICION:'Pendiente'})[s.compensatoryType] || '-',
+      };
+    });
     downloadXLSX(filename + '.xlsx', headers, rows);
     snackbar('Excel exportado');
   } catch (e) { snackbar('Error al exportar', true); }
@@ -1496,7 +1830,7 @@ async function exportHistoricXLSX() {
 let importState = {
   file: null,
   filePath: null,
-  module: 'employees',
+  module: 'EMPLOYEES',
   preview: null,
   autoCreateRefs: false,
   updateExisting: true,
@@ -1504,19 +1838,36 @@ let importState = {
 };
 
 const MODULE_LABELS = {
-  employees: 'Empleados',
-  work_sessions: 'Jornadas laborales',
-  holidays: 'Festivos',
-  users: 'Usuarios',
-  companies: 'Empresas',
-  departments: 'Departamentos',
-  positions: 'Cargos',
-  cost_centers: 'Centros de costo',
-  work_configurations: 'Configuraciones laborales',
+  EMPLOYEES: 'Empleados',
+  WORK_SESSIONS: 'Jornadas laborales',
+  HOLIDAYS: 'Festivos',
+  USERS: 'Usuarios',
+  COMPANIES: 'Empresas',
+  DEPARTMENTS: 'Departamentos',
+  POSITIONS: 'Cargos',
+  COST_CENTERS: 'Centros de costo',
+  WORK_CONFIGURATIONS: 'Configuraciones laborales',
 };
 
+/* FRONTEND LOGGER */
+async function frontendLog(msg) {
+  try {
+    if (window.__TAURI_INTERNALS__) {
+      await window.__TAURI_INTERNALS__.invoke('append_frontend_log', { message: msg });
+    }
+  } catch(e) {
+    try {
+      if (window.__TAURI_INTERNALS__) {
+        await window.__TAURI_INTERNALS__.invoke('append_frontend_log', {
+          message: 'FRONTEND_LOG_ERROR: cmd=append_frontend_log msg="' + msg + '" error="' + (e.message || String(e)) + '"'
+        });
+      }
+    } catch(_) {}
+  }
+}
+
 async function renderImportacion() {
-  importState = { file: null, filePath: null, module: 'employees', preview: null, autoCreateRefs: false, updateExisting: true, dryRun: false };
+  importState = { file: null, filePath: null, module: 'EMPLOYEES', preview: null, autoCreateRefs: false, updateExisting: true, dryRun: false };
 
   document.getElementById('pageContent').innerHTML = `
     <div class="page-header"><h1>Centro de Importaci\u00f3n</h1></div>
@@ -1544,9 +1895,9 @@ async function renderImportacion() {
             <div class="form-group half">
               <label>M\u00f3dulo destino</label>
               <select id="importModule" onchange="importState.module=this.value">
-                <option value="employees">Empleados</option>
-                <option value="work_sessions">Jornadas laborales</option>
-                <option value="holidays">Festivos</option>
+                <option value="EMPLOYEES">Empleados</option>
+                <option value="WORK_SESSIONS">Jornadas laborales</option>
+                <option value="HOLIDAYS">Festivos</option>
               </select>
             </div>
             <div class="form-group half">
@@ -1600,11 +1951,18 @@ async function renderImportacion() {
               <button class="btn btn-sm btn-primary" onclick="downloadEmployeeTemplate()">Descargar</button>
             </div>
             <div class="import-template-card">
+              <span class="material-icons" style="font-size:32px;color:var(--primary)">person_search</span>
+              <h4>Plantilla BD Personas EP</h4>
+              <p style="font-size:12px;color:var(--text-muted)">Formato BD personas para importar desde Excel del cliente</p>
+              <button class="btn btn-sm btn-primary" onclick="downloadBdPersonasEpTemplate()">Descargar</button>
+            </div>
+            <div class="import-template-card">
               <span class="material-icons" style="font-size:32px;color:var(--primary)">event_note</span>
               <h4>Plantilla de jornadas</h4>
               <p style="font-size:12px;color:var(--text-muted)">Formato del cliente para jornadas laborales</p>
               <button class="btn btn-sm btn-primary" onclick="downloadWorkSessionTemplate()">Descargar</button>
             </div>
+
             <div class="import-template-card">
               <span class="material-icons" style="font-size:32px;color:var(--primary)">download</span>
               <h4>Exportar empleados</h4>
@@ -1703,7 +2061,9 @@ function clearImportFile() {
 }
 
 async function previewImportFile() {
-  if (!importState.file) { snackbar('Seleccione un archivo primero', true); return; }
+  await frontendLog('PREVIEW_STEP_1: previewImportFile entered');
+  await frontendLog('PREVIEW_STEP_1a: importState.file = ' + (importState.file ? 'present' : 'null'));
+  if (!importState.file) { await frontendLog('PREVIEW_STEP_2: EARLY RETURN - no file'); snackbar('Seleccione un archivo primero', true); return; }
 
   document.getElementById('btnPreviewImport').disabled = true;
   document.getElementById('btnPreviewImport').textContent = 'Validando...';
@@ -1713,17 +2073,25 @@ async function previewImportFile() {
     const formData = new FormData();
     formData.append('file', importState.file);
 
+    await frontendLog('PREVIEW_STEP_3: About to upload file');
     const token = localStorage.getItem('token');
     const uploadRes = await fetch(`${API}/import/upload`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` },
       body: formData,
     });
+    await frontendLog('PREVIEW_STEP_4: Upload response status = ' + uploadRes.status);
 
-    if (!uploadRes.ok) throw { mensaje: 'Error al subir archivo' };
+    if (!uploadRes.ok) {
+      let uploadErr = 'Error al subir archivo';
+      try { const uj = await uploadRes.json(); uploadErr = uj.mensaje || uj.message || JSON.stringify(uj); } catch(_) {}
+      throw { mensaje: `Error al subir archivo (${uploadRes.status}): ${uploadErr}` };
+    }
     const uploadData = await uploadRes.json();
     importState.filePath = uploadData.filePath;
+    await frontendLog('PREVIEW_STEP_5: filePath = ' + importState.filePath);
 
+    await frontendLog('PREVIEW_STEP_6: About to validate preview');
     const previewRes = await fetch(`${API}/import/preview`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -1734,19 +2102,33 @@ async function previewImportFile() {
         updateExisting: importState.updateExisting,
       }),
     });
+    await frontendLog('PREVIEW_STEP_7: Preview response status = ' + previewRes.status);
 
-    if (!previewRes.ok) throw { mensaje: 'Error al validar archivo' };
+    if (!previewRes.ok) {
+      let previewErr = 'Error al validar archivo';
+      try { const pj = await previewRes.json(); previewErr = pj.mensaje || pj.message || JSON.stringify(pj); } catch(_) {}
+      throw { mensaje: `Error al validar archivo (${previewRes.status}): ${previewErr}` };
+    }
     const previewData = await previewRes.json();
     importState.preview = previewData;
+    await frontendLog('PREVIEW_STEP_8: Preview data received, invalidRows = ' + (previewData.summary ? previewData.summary.invalidRows : 'NO_SUMMARY'));
 
     renderImportPreview(previewData);
+    await frontendLog('PREVIEW_STEP_9: Preview rendered');
 
-    if (previewData.summary.invalidRows === 0) {
+    await frontendLog('PREVIEW_STEP_10: Checking invalidRows === 0: ' + (previewData.summary ? (previewData.summary.invalidRows === 0) : 'NO_SUMMARY'));
+    if (previewData.summary && previewData.summary.invalidRows === 0) {
+      await frontendLog('PREVIEW_STEP_11: Enabling execute button');
       document.getElementById('btnExecuteImport').disabled = false;
+      await frontendLog('PREVIEW_STEP_12: Button disabled? = ' + document.getElementById('btnExecuteImport').disabled);
+    } else {
+      await frontendLog('PREVIEW_STEP_11b: invalidRows !== 0 or summary missing, button stays disabled');
     }
   } catch (e) {
+    await frontendLog('PREVIEW_STEP_ERR: Caught exception: ' + (e.mensaje || e.message || String(e)));
     snackbar(e.mensaje || 'Error al procesar archivo', true);
   } finally {
+    await frontendLog('PREVIEW_STEP_FINALLY: Re-enabling preview button');
     document.getElementById('btnPreviewImport').disabled = false;
     document.getElementById('btnPreviewImport').textContent = 'Vista previa';
   }
@@ -1813,18 +2195,39 @@ function renderImportPreview(data) {
 }
 
 async function executeImportFile() {
-  if (!importState.filePath) { snackbar('Primero valide el archivo', true); return; }
+  await frontendLog('EXECUTE_STEP_1: executeImportFile entered');
+  const btn = document.getElementById('btnExecuteImport');
+  await frontendLog('EXECUTE_STEP_1a: importState.filePath = ' + (importState.filePath || 'null'));
+  await frontendLog('EXECUTE_STEP_1b: importState.dryRun = ' + importState.dryRun);
+  await frontendLog('EXECUTE_STEP_1c: importState.module = ' + importState.module);
+  await frontendLog('EXECUTE_STEP_1d: btnExecuteImport disabled? = ' + btn.disabled);
+  await frontendLog('EXECUTE_STEP_1e: btnExecuteImport pointer-events? = ' + getComputedStyle(btn).pointerEvents);
+  await frontendLog('EXECUTE_STEP_1f: btnExecuteImport onclick = ' + (btn.getAttribute('onclick') || 'null'));
+  await frontendLog('EXECUTE_STEP_1g: btnExecuteImport outerHTML = ' + btn.outerHTML.substring(0, 200));
+
+  if (!importState.filePath) { await frontendLog('EXECUTE_STEP_2: EARLY RETURN - filePath is falsy'); snackbar('Primero valide el archivo', true); return; }
+  await frontendLog('EXECUTE_STEP_2b: filePath is truthy, continuing');
 
   if (!importState.dryRun) {
+    await frontendLog('EXECUTE_STEP_3: dryRun is false, showing confirm dialog');
     const ok = confirm('\u00bfEst\u00e1 seguro de ejecutar la importaci\u00f3n?\n\nSe crear\u00e1 un backup autom\u00e1tico antes de proceder.');
-    if (!ok) return;
+    await frontendLog('EXECUTE_STEP_4: confirm result = ' + ok);
+    if (!ok) { await frontendLog('EXECUTE_STEP_5: EARLY RETURN - user cancelled'); return; }
+    await frontendLog('EXECUTE_STEP_5b: User confirmed');
+  } else {
+    await frontendLog('EXECUTE_STEP_3b: dryRun is true, skipping confirm');
   }
 
+  await frontendLog('EXECUTE_STEP_6: Disabling button, setting text to Importando...');
   document.getElementById('btnExecuteImport').disabled = true;
   document.getElementById('btnExecuteImport').textContent = 'Importando...';
+  await frontendLog('EXECUTE_STEP_7: Button text now = ' + document.getElementById('btnExecuteImport').textContent);
 
   try {
+    await frontendLog('EXECUTE_STEP_8: Getting token');
     const token = localStorage.getItem('token');
+    await frontendLog('EXECUTE_STEP_9: Token exists? = ' + !!token);
+    await frontendLog('EXECUTE_STEP_10: About to fetch ' + API + '/import/execute');
     const res = await fetch(`${API}/import/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -1836,9 +2239,16 @@ async function executeImportFile() {
         dryRun: importState.dryRun,
       }),
     });
+    await frontendLog('EXECUTE_STEP_11: Fetch response status = ' + res.status);
 
-    if (!res.ok) throw { mensaje: 'Error al ejecutar importaci\u00f3n' };
+    if (!res.ok) {
+      let execErr = 'Error al ejecutar importaci\u00f3n';
+      try { const ej = await res.json(); execErr = ej.mensaje || ej.message || JSON.stringify(ej); } catch(_) {}
+      throw { mensaje: `Error al ejecutar importaci\u00f3n (${res.status}): ${execErr}` };
+    }
+    await frontendLog('EXECUTE_STEP_12: Response OK, parsing JSON');
     const result = await res.json();
+    await frontendLog('EXECUTE_STEP_13: Result received, summary: ' + JSON.stringify(result.summary));
 
     document.getElementById('importResultSection').style.display = '';
     const s = result.summary;
@@ -1868,8 +2278,10 @@ async function executeImportFile() {
     snackbar(importState.dryRun ? 'Simulaci\u00f3n completada' : 'Importaci\u00f3n completada');
     loadImportHistory();
   } catch (e) {
+    await frontendLog('EXECUTE_STEP_ERR: Caught exception: ' + (e.mensaje || e.message || String(e)));
     snackbar(e.mensaje || 'Error al importar', true);
   } finally {
+    await frontendLog('EXECUTE_STEP_FINALLY: Re-enabling execute button');
     document.getElementById('btnExecuteImport').disabled = false;
     document.getElementById('btnExecuteImport').textContent = 'Ejecutar importaci\u00f3n';
   }
@@ -1878,53 +2290,115 @@ async function executeImportFile() {
 async function downloadEmployeeTemplate() {
   try {
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API}/import/employees/template`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    if (!res.ok) throw new Error('Error');
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'plantilla_empleados.xlsx'; a.click();
-    URL.revokeObjectURL(url);
-    snackbar('Plantilla descargada');
-  } catch (e) { snackbar('Error al descargar plantilla', true); }
+    if (window.__TAURI_INTERNALS__) {
+      const absUrl = window.location.origin + '/api/v1/import/employees/template';
+      const path = await window.__TAURI_INTERNALS__.invoke('save_download_file', {
+        url: absUrl,
+        token: token,
+        defaultName: 'plantilla_empleados.xlsx',
+      });
+      snackbar('Plantilla descargada en: ' + path);
+    } else {
+      const res = await fetch(`${API}/import/employees/template`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Error');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'plantilla_empleados.xlsx'; document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      snackbar('Plantilla descargada');
+    }
+  } catch (e) { snackbar('Error al descargar plantilla: ' + (e || ''), true); }
 }
 
 async function downloadWorkSessionTemplate() {
   try {
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API}/import/template/work-sessions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({}),
-    });
-    if (!res.ok) throw new Error('Error');
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'plantilla_jornadas.xlsx'; a.click();
-    URL.revokeObjectURL(url);
-    snackbar('Plantilla descargada');
-  } catch (e) { snackbar('Error al descargar plantilla', true); }
+    if (window.__TAURI_INTERNALS__) {
+      const absUrl = window.location.origin + '/api/v1/import/template/work-sessions';
+      const path = await window.__TAURI_INTERNALS__.invoke('save_download_file_post', {
+        url: absUrl,
+        token: token,
+        defaultName: 'plantilla_jornadas.xlsx',
+      });
+      snackbar('Plantilla descargada en: ' + path);
+    } else {
+      const res = await fetch(`${API}/import/template/work-sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error('Error');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'plantilla_jornadas.xlsx'; document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      snackbar('Plantilla descargada');
+    }
+  } catch (e) { snackbar('Error al descargar plantilla: ' + (e || ''), true); }
+}
+
+async function downloadBdPersonasEpTemplate() {
+  try {
+    const token = localStorage.getItem('token');
+    if (window.__TAURI_INTERNALS__) {
+      const absUrl = window.location.origin + '/api/v1/import/template/bd-personas-ep';
+      const path = await window.__TAURI_INTERNALS__.invoke('save_download_file_post', {
+        url: absUrl,
+        token: token,
+        defaultName: 'plantilla_bd_personas_ep.xlsx',
+      });
+      snackbar('Plantilla BD Personas EP descargada en: ' + path);
+    } else {
+      const res = await fetch(`${API}/import/template/bd-personas-ep`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error('Error');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'plantilla_bd_personas_ep.xlsx'; document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      snackbar('Plantilla BD Personas EP descargada');
+    }
+  } catch (e) { snackbar('Error al descargar plantilla BD Personas EP: ' + (e || ''), true); }
 }
 
 async function exportEmployeesTemplate() {
   try {
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API}/import/employees/export`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({}),
-    });
-    if (!res.ok) throw new Error('Error');
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'exportacion_empleados.xlsx'; a.click();
-    URL.revokeObjectURL(url);
-    snackbar('Empleados exportados');
-  } catch (e) { snackbar('Error al exportar', true); }
+    if (window.__TAURI_INTERNALS__) {
+      const absUrl = window.location.origin + '/api/v1/import/employees/export';
+      const path = await window.__TAURI_INTERNALS__.invoke('save_download_file_post', {
+        url: absUrl,
+        token: token,
+        defaultName: 'exportacion_empleados.xlsx',
+      });
+      snackbar('Empleados exportados en: ' + path);
+    } else {
+      const res = await fetch(`${API}/import/employees/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error('Error');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'exportacion_empleados.xlsx'; document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      snackbar('Empleados exportados');
+    }
+  } catch (e) { snackbar('Error al exportar: ' + (e || ''), true); }
 }
 
 let importHistPage = 1;
@@ -1962,17 +2436,28 @@ async function loadImportHistory(page) {
 async function downloadErrorReport(importId) {
   try {
     const token = localStorage.getItem('token');
-    const res = await fetch(`${API}/import/history/${importId}/error-report`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    if (!res.ok) throw new Error('Error');
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `informe_errores_${importId}.xlsx`; a.click();
-    URL.revokeObjectURL(url);
-    snackbar('Informe descargado');
-  } catch (e) { snackbar('Error al descargar informe', true); }
+    if (window.__TAURI_INTERNALS__) {
+      const absUrl = window.location.origin + `/api/v1/import/history/${importId}/error-report`;
+      const path = await window.__TAURI_INTERNALS__.invoke('save_download_file', {
+        url: absUrl,
+        token: token,
+        defaultName: `informe_errores_${importId}.xlsx`,
+      });
+      snackbar('Informe descargado en: ' + path);
+    } else {
+      const res = await fetch(`${API}/import/history/${importId}/error-report`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Error');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `informe_errores_${importId}.xlsx`; document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      snackbar('Informe descargado');
+    }
+  } catch (e) { snackbar('Error al descargar informe: ' + (e || ''), true); }
 }
 
 async function rollbackImport(importId) {
@@ -2452,38 +2937,49 @@ document.addEventListener('click', (e) => {
   if (xlsxBtn) {
     if (!lastReportData || lastReportData.length === 0) { snackbar('No hay datos del reporte'); return; }
     const periodo = xlsxBtn.dataset.periodo;
-    const rows = lastReportData.map(r => ({
-      empleado: escapeHtml(r.employee.firstName) + ' ' + escapeHtml(r.employee.lastName),
-      documento: escapeHtml(r.employee.documentNumber),
-      jornadas: r.totalSessions,
-      total: formatMinutesToHours(r.totalMinutes),
-      ord: formatMinutesToHours(r.ordinaryMinutes),
-      noct: formatMinutesToHours(r.nightSurchargeMinutes),
-      extra_diurnas: formatMinutesToHours(r.extraDayMinutes),
-      extra_nocturnas: formatMinutesToHours(r.extraNightMinutes),
-      dominical: formatMinutesToHours(r.sundayMinutes),
-      festivo: formatMinutesToHours(r.holidayMinutes),
-      extra_fest_diurnas: formatMinutesToHours(r.extraHolidayDayMinutes),
-      extra_fest_nocturnas: formatMinutesToHours(r.extraHolidayNightMinutes),
-      recargo_ndf: formatMinutesToHours(r.sundayNightSurchargeMinutes),
-    }));
+    const rows = lastReportData.map(r => {
+      const workedMinutes = (r.ordinaryMinutes||0) + (r.sundayMinutes||0) + (r.holidayMinutes||0) +
+        (r.extraDayMinutes||0) + (r.extraNightMinutes||0) +
+        (r.extraHolidayDayMinutes||0) + (r.extraHolidayNightMinutes||0);
+      return {
+        empleado: escapeHtml(r.employee.firstName) + ' ' + escapeHtml(r.employee.lastName),
+        documento: escapeHtml(r.employee.documentNumber),
+        jornadas: r.totalSessions,
+        total: formatMinutesToHours(workedMinutes),
+        ord: formatMinutesToHours(r.ordinaryMinutes),
+        noct: formatMinutesToHours(r.nightSurchargeMinutes),
+        extra_diurnas: formatMinutesToHours(r.extraDayMinutes),
+        extra_nocturnas: formatMinutesToHours(r.extraNightMinutes),
+        dominical: formatMinutesToHours(r.sundayMinutes),
+        festivo: formatMinutesToHours(r.holidayMinutes),
+        extra_fest_diurnas: formatMinutesToHours(r.extraHolidayDayMinutes),
+        extra_fest_nocturnas: formatMinutesToHours(r.extraHolidayNightMinutes),
+        recargo_ndf: formatMinutesToHours(r.sundayNightSurchargeMinutes),
+      };
+    });
     const headers = [
       { label: 'Empleado', key: 'empleado' },
       { label: 'Documento', key: 'documento' },
       { label: 'Jornadas', key: 'jornadas' },
       { label: 'Total', key: 'total' },
-      { label: 'Ordinarias', key: 'ord' },
-      { label: 'Nocturnas', key: 'noct' },
-      { label: 'Extra Diurnas', key: 'extra_diurnas' },
-      { label: 'Extra Nocturnas', key: 'extra_nocturnas' },
-      { label: 'Dominical', key: 'dominical' },
-      { label: 'Festivo', key: 'festivo' },
-      { label: 'Extra Fest. Diurnas', key: 'extra_fest_diurnas' },
-      { label: 'Extra Fest. Nocturnas', key: 'extra_fest_nocturnas' },
-      { label: 'Recargo NDF', key: 'recargo_ndf' },
+      { label: '001 Ordinarias', key: 'ord' },
+      { label: '006-RECNOC Nocturnas', key: 'noct' },
+      { label: '002-HED Extra Diurnas', key: 'extra_diurnas' },
+      { label: '003-HEN Extra Nocturnas', key: 'extra_nocturnas' },
+      { label: '013-DOMINGO Dominical', key: 'dominical' },
+      { label: '014-FESTIVO Festivo', key: 'festivo' },
+      { label: '004-HEFD Extra Fest. Diurnas', key: 'extra_fest_diurnas' },
+      { label: '005-HEFN Extra Fest. Nocturnas', key: 'extra_fest_nocturnas' },
+      { label: '012-REC.NDF Recargo NDF', key: 'recargo_ndf' },
     ];
     downloadXLSX('reporte_' + periodo + '.xlsx', headers, rows);
     snackbar('Excel exportado');
   }
 });
-if (localStorage.getItem('token')) initApp(); else showLogin();
+if (localStorage.getItem('token')) {
+  frontendLog('APPLICATION_STARTED');
+  initApp();
+} else {
+  frontendLog('APPLICATION_STARTED');
+  showLogin();
+}

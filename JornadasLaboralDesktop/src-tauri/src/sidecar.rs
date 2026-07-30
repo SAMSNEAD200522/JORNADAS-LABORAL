@@ -261,24 +261,37 @@ impl SidecarManager {
     }
 
     fn spawn_process(&self) -> Result<(), String> {
-        let node = find_node()?;
+        let node = find_node(&self.config)?;
         let backend_dir = &self.config.backend_dir;
 
-        let main_js = if backend_dir.join("dist").join("src").join("main.js").exists() {
-            "dist/src/main.js"
+        let main_js_path = if backend_dir.join("dist").join("src").join("main.js").exists() {
+            backend_dir.join("dist").join("src").join("main.js")
         } else {
-            "dist/main.js"
+            backend_dir.join("dist").join("main.js")
         };
 
         let mut cmd = Command::new(&node);
-        cmd.arg(main_js)
-            .current_dir(backend_dir)
+        cmd.arg(&main_js_path)
+            .current_dir(&self.config.app_data_dir)
             .env("DATABASE_URL", self.config.database_url())
+            .env("APP_PORT", self.port.to_string())
             .env("PORT", self.port.to_string())
             .env("NODE_ENV", "production")
+            .env("FRONTEND_DIR", self.config.frontend_dir.to_string_lossy().to_string())
+            .env("JWT_SECRET", "jornadas-laborales-production-2024-secure-key")
+            .env("JWT_EXPIRES_IN", "8h")
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        append_path(&mut cmd);
+        build_path_env(&mut cmd, &self.config.node_dir, &self.config.backend_dir);
+
+        if let Ok(f) = std::fs::File::create(self.config.logs_dir.join("backend.log")) {
+            cmd.stderr(Stdio::from(f));
+        }
+
+        info!("Spawning command: {} {}", node, main_js_path.display());
+        info!("  working_dir: {}", self.config.app_data_dir.display());
+        info!("  APP_PORT: {}", self.port);
+
         let child = cmd
             .spawn()
             .map_err(|e| format!("Failed to start NestJS: {}", e))?;
@@ -306,7 +319,21 @@ impl SidecarManager {
     }
 }
 
-pub fn find_node() -> Result<String, String> {
+pub fn find_node(config: &AppConfig) -> Result<String, String> {
+    if !config.node_dir.as_os_str().is_empty() {
+        let bundled = config.node_dir.join("node.exe");
+        if bundled.exists() {
+            info!("Using bundled Node.js at {}", bundled.display());
+            return Ok(bundled.to_string_lossy().to_string());
+        }
+    }
+
+    let backend_node = config.backend_dir.join("node.exe");
+    if backend_node.exists() {
+        info!("Found Node.js at backend dir: {}", backend_node.display());
+        return Ok(backend_node.to_string_lossy().to_string());
+    }
+
     let candidates = ["node", "nodejs"];
     for candidate in &candidates {
         if let Ok(output) = Command::new(candidate)
@@ -316,6 +343,7 @@ pub fn find_node() -> Result<String, String> {
             .output()
         {
             if output.status.success() {
+                info!("Found system Node.js: {}", candidate);
                 return Ok(candidate.to_string());
             }
         }
@@ -332,46 +360,23 @@ pub fn find_node() -> Result<String, String> {
         }
     }
 
-    Err("Node.js not found. Please install Node.js and add it to PATH.".to_string())
+    Err("Node.js not found. The application requires Node.js to run.".to_string())
 }
 
-fn node_dir() -> Option<PathBuf> {
-    let node_path = find_node().ok()?;
-    let path = PathBuf::from(&node_path);
-    if path.is_absolute() {
-        path.parent().map(|p| p.to_path_buf())
-    } else {
-        if let Ok(output) = Command::new(&node_path)
-            .arg("--version")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-        {
-            if output.status.success() {
-                if let Ok(where_output) = Command::new("where")
-                    .arg(&node_path)
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
-                    .output()
-                {
-                    let stdout = String::from_utf8_lossy(&where_output.stdout);
-                    if let Some(first_line) = stdout.lines().next() {
-                        let full = PathBuf::from(first_line.trim());
-                        if full.exists() {
-                            return full.parent().map(|p| p.to_path_buf());
-                        }
-                    }
-                }
-            }
-        }
-        None
+fn build_path_env(cmd: &mut Command, node_dir: &std::path::Path, backend_dir: &std::path::Path) {
+    let mut path_parts: Vec<String> = Vec::new();
+
+    if !node_dir.as_os_str().is_empty() && node_dir.join("node.exe").exists() {
+        path_parts.push(node_dir.to_string_lossy().to_string());
     }
-}
 
-pub fn append_path(cmd: &mut Command) {
-    if let Some(dir) = node_dir() {
-        let current_path = std::env::var("PATH").unwrap_or_default();
-        let new_path = format!("{};{}", dir.display(), current_path);
+    if backend_dir.join("node.exe").exists() {
+        path_parts.push(backend_dir.to_string_lossy().to_string());
+    }
+
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    if !path_parts.is_empty() {
+        let new_path = format!("{};{}", path_parts.join(";"), current_path);
         cmd.env("PATH", &new_path);
     }
 }
@@ -406,10 +411,13 @@ pub fn start_background_health_monitor(
                 Ok(resp) => {
                     if resp.status().is_success() {
                         if let Ok(body) = resp.json::<serde_json::Value>() {
-                            if body.get("ready").and_then(|v| v.as_bool()) == Some(true) {
-                                log::debug!("Health monitor: OK (ready=true)");
+                            let is_ready = body.get("ready").and_then(|v| v.as_bool()) == Some(true)
+                                || body.get("estado").and_then(|v| v.as_str()) == Some("OK")
+                                || body.get("status").and_then(|v| v.as_str()) == Some("UP");
+                            if is_ready {
+                                log::debug!("Health monitor: OK");
                             } else {
-                                warn!("Health monitor: backend responding but not ready");
+                                log::debug!("Health monitor: responding but status unknown");
                             }
                         }
                     } else {
@@ -428,6 +436,87 @@ pub fn start_background_health_monitor(
     })
 }
 
+pub fn kill_stale_backend_processes() {
+    use std::process::Command;
+
+    let output = Command::new("wmic")
+        .args([
+            "process",
+            "where",
+            "name='node.exe'",
+            "get",
+            "ProcessId,CommandLine",
+            "/format:csv",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output();
+
+    let output = match output {
+        Ok(o) => o,
+        Err(_) => return,
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let current_pid = std::process::id();
+
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split(',').collect();
+        if parts.len() < 3 {
+            continue;
+        }
+        let pid_str = parts[1].trim();
+        let cmd = parts[2].trim().to_lowercase();
+
+        let is_backend = cmd.contains("dist/src/main.js")
+            || cmd.contains("dist\\src\\main.js")
+            || cmd.contains("dist/main.js")
+            || cmd.contains("dist\\main.js");
+
+        if !is_backend {
+            continue;
+        }
+
+        if let Ok(pid) = pid_str.parse::<u32>() {
+            if pid == current_pid {
+                continue;
+            }
+            warn!(
+                "Killing stale backend node process PID={} cmd={}",
+                pid,
+                parts[2].trim()
+            );
+            let _ = Command::new("taskkill")
+                .args(["/F", "/PID", &pid.to_string()])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .output();
+        }
+    }
+
+    std::thread::sleep(Duration::from_millis(500));
+}
+
+pub fn run_prisma_migrate_status(
+    backend_dir: &std::path::Path,
+    database_url: &str,
+) -> Result<String, String> {
+    let mut cmd = Command::new("cmd");
+    cmd.args(["/c", "npx", "prisma", "migrate", "status"])
+        .current_dir(backend_dir)
+        .env("DATABASE_URL", database_url)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to run prisma migrate status: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    Ok(format!("{}\n{}", stdout, stderr))
+}
+
 pub fn check_health_raw(url: &str) -> Result<serde_json::Value, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
@@ -441,126 +530,4 @@ pub fn check_health_raw(url: &str) -> Result<serde_json::Value, String> {
 
     resp.json::<serde_json::Value>()
         .map_err(|e| format!("Failed to parse health response: {}", e))
-}
-
-pub fn run_npm_install(backend_dir: &std::path::Path) -> Result<(), String> {
-    info!("Running npm install in backend...");
-    let mut cmd = Command::new("cmd");
-    cmd.args(["/c", "npm", "install", "--production=false"])
-        .current_dir(backend_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    append_path(&mut cmd);
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to run npm install: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("npm install failed: {}", stderr));
-    }
-
-    info!("npm install completed successfully");
-    Ok(())
-}
-
-pub fn run_prisma_generate(backend_dir: &std::path::Path) -> Result<(), String> {
-    info!("Running prisma generate...");
-    let mut cmd = Command::new("cmd");
-    cmd.args(["/c", "npx", "prisma", "generate"])
-        .current_dir(backend_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    append_path(&mut cmd);
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to run prisma generate: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        warn!("prisma generate warning: {}", stderr);
-    } else {
-        info!("Prisma client generated successfully");
-    }
-    Ok(())
-}
-
-pub fn run_prisma_migrate_deploy(
-    backend_dir: &std::path::Path,
-    database_url: &str,
-) -> Result<(), String> {
-    info!("Running prisma migrate deploy...");
-    let mut cmd = Command::new("cmd");
-    cmd.args(["/c", "npx", "prisma", "migrate", "deploy"])
-        .current_dir(backend_dir)
-        .env("DATABASE_URL", database_url)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    append_path(&mut cmd);
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to run prisma migrate deploy: {}", e))?;
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    if !output.status.success() {
-        error!("Migration failed (exit {}): {}", output.status.code().unwrap_or(-1), stderr);
-        return Err(format!("Prisma migrate deploy failed: {}", stderr));
-    }
-
-    if !stderr.trim().is_empty() {
-        info!("Migration output: {}", stderr.lines().last().unwrap_or(""));
-    }
-    if !stdout.trim().is_empty() {
-        info!("Migration stdout: {}", stdout.lines().last().unwrap_or(""));
-    }
-
-    info!("Database migrations applied successfully");
-    Ok(())
-}
-
-pub fn ensure_prisma_client(backend_dir: &std::path::Path) -> Result<(), String> {
-    let client_dir = backend_dir.join("node_modules").join(".prisma").join("client");
-    if client_dir.exists() {
-        let main_js = client_dir.join("index.js");
-        if main_js.exists() {
-            info!("Prisma client already generated, skipping");
-            return Ok(());
-        }
-    }
-
-    run_prisma_generate(backend_dir)
-}
-
-pub fn build_backend(backend_dir: &std::path::Path) -> Result<(), String> {
-    if backend_dir.join("dist").join("src").join("main.js").exists()
-        || backend_dir.join("dist").join("main.js").exists()
-    {
-        info!("Backend already built, skipping build step");
-        return Ok(());
-    }
-
-    info!("Building NestJS backend...");
-    let mut cmd = Command::new("cmd");
-    cmd.args(["/c", "npm", "run", "build"])
-        .current_dir(backend_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    append_path(&mut cmd);
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to run npm build: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(format!(
-            "Backend build failed:\nstdout: {}\nstderr: {}",
-            stdout, stderr
-        ));
-    }
-
-    info!("NestJS backend built successfully");
-    Ok(())
 }
